@@ -35,11 +35,41 @@ func (n *RBNode) getUncle() *RBNode {
 	}
 }
 
+func (n *RBNode) getSibling() *RBNode {
+	if n.Parent == nil {
+		return nil
+	}
+	if n == n.Parent.Left {
+		return n.Parent.Right
+	} else {
+		return n.Parent.Left
+	}
+}
+
 func (n *RBNode) rotateLeft() {
 	child, parent := n.Right, n.Parent
 
 	if child.Left != nil {
 		child.Left.Parent = n
+	}
+	n.Right = child.Left
+	n.Parent = child
+	child.Left = n
+	child.Parent = parent
+	if parent != nil {
+		if parent.Left == n {
+			parent.Left = child
+		} else {
+			parent.Right = child
+		}
+	}
+}
+
+func (n *RBNode) rotateRight() {
+	child, parent := n.Left, n.Parent
+
+	if child.Right != nil {
+		child.Right.Parent = n
 	}
 	n.Left = child.Right
 	n.Parent = child
@@ -52,8 +82,4 @@ func (n *RBNode) rotateLeft() {
 			parent.Left = child
 		}
 	}
-}
-
-func (n *RBNode) rotateRight() {
-
 }
