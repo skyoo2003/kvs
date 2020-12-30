@@ -47,7 +47,10 @@ checksum:
 # TODO: dockers:
 
 release:
-  prerelease: true
+  github:
+    owner: skyoo2003
+    name: kvs
+  draft: true
   name_template: "{{ .ProjectName }}-v{{ .Version }}"
 
 signs:
