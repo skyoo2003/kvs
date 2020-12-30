@@ -51,7 +51,7 @@ release:
     owner: skyoo2003
     name: kvs
   draft: true
-  name_template: "{{ .ProjectName }}-v{{ .Version }}"
+  name_template: "v{{ .Version }}"
 
 signs:
 - artifacts: checksum
