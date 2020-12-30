@@ -1,12 +1,12 @@
-package core
+package rbt
 
 import "testing"
 
 func Test_RBNode_getGrandparent(t *testing.T) {
-	n1 := &RBNode{nil, ColorBlack, nil, nil, nil}
-	n2 := &RBNode{nil, ColorRed, n1, nil, nil}
+	n1 := &RBNode{"n1", nil, false, nil, nil, nil}
+	n2 := &RBNode{"n2", nil, true, n1, nil, nil}
 	n1.Left = n2
-	n3 := &RBNode{nil, ColorBlack, n2, nil, nil}
+	n3 := &RBNode{"n3", nil, false, n2, nil, nil}
 	n2.Left = n3
 
 	if n1.getGrandparent() != nil {
@@ -21,13 +21,13 @@ func Test_RBNode_getGrandparent(t *testing.T) {
 }
 
 func Test_RBNode_getUncle(t *testing.T) {
-	n1 := &RBNode{nil, ColorBlack, nil, nil, nil}
-	n2 := &RBNode{nil, ColorRed, n1, nil, nil}
-	n3 := &RBNode{nil, ColorRed, n1, nil, nil}
+	n1 := &RBNode{"n1", nil, false, nil, nil, nil}
+	n2 := &RBNode{"n2", nil, true, n1, nil, nil}
+	n3 := &RBNode{"n3", nil, true, n1, nil, nil}
 	n1.Left, n1.Right = n2, n3
-	n4 := &RBNode{nil, ColorBlack, n2, nil, nil}
+	n4 := &RBNode{"n4", nil, false, n2, nil, nil}
 	n2.Left = n4
-	n5 := &RBNode{nil, ColorBlack, n3, nil, nil}
+	n5 := &RBNode{"n5", nil, false, n3, nil, nil}
 	n3.Left = n5
 
 	if n1.getUncle() != nil {
@@ -48,9 +48,9 @@ func Test_RBNode_getUncle(t *testing.T) {
 }
 
 func Test_RBNode_getSibling(t *testing.T) {
-	n1 := &RBNode{nil, ColorBlack, nil, nil, nil}
-	n2 := &RBNode{nil, ColorRed, n1, nil, nil}
-	n3 := &RBNode{nil, ColorRed, n1, nil, nil}
+	n1 := &RBNode{"n1", nil, false, nil, nil, nil}
+	n2 := &RBNode{"n2", nil, true, n1, nil, nil}
+	n3 := &RBNode{"n3", nil, true, n1, nil, nil}
 	n1.Left, n1.Right = n2, n3
 
 	if n1.getSibling() != nil {
@@ -65,9 +65,9 @@ func Test_RBNode_getSibling(t *testing.T) {
 }
 
 func Test_RBNode_rotateLeft(t *testing.T) {
-	n1 := &RBNode{nil, ColorBlack, nil, nil, nil}
-	n2 := &RBNode{nil, ColorRed, n1, nil, nil}
-	n3 := &RBNode{nil, ColorRed, n1, nil, nil}
+	n1 := &RBNode{"n1", nil, false, nil, nil, nil}
+	n2 := &RBNode{"n2", nil, true, n1, nil, nil}
+	n3 := &RBNode{"n3", nil, true, n1, nil, nil}
 	n1.Left, n1.Right = n2, n3
 
 	// n2 << n1 >> n3 -> n2 << n1 << n3
@@ -88,9 +88,9 @@ func Test_RBNode_rotateLeft(t *testing.T) {
 }
 
 func Test_RBNode_rotateRight(t *testing.T) {
-	n1 := &RBNode{nil, ColorBlack, nil, nil, nil}
-	n2 := &RBNode{nil, ColorRed, n1, nil, nil}
-	n3 := &RBNode{nil, ColorRed, n1, nil, nil}
+	n1 := &RBNode{"n1", nil, false, nil, nil, nil}
+	n2 := &RBNode{"n2", nil, true, n1, nil, nil}
+	n3 := &RBNode{"n3", nil, true, n1, nil, nil}
 	n1.Left, n1.Right = n2, n3
 
 	// n2 << n1 >> n3 -> n2 >> n1 >> n3
@@ -108,5 +108,4 @@ func Test_RBNode_rotateRight(t *testing.T) {
 	if n3.Parent != n1 {
 		t.Error("n3.Parent is not equal to n1")
 	}
-
 }

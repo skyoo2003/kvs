@@ -1,16 +1,15 @@
-package core
+// Package rbt implements the Red-Black tree
+package rbt
 
-const (
-	ColorBlack = iota
-	ColorRed
-)
-
+// RBTree A structure of red-black tree
 type RBTree struct {
 }
 
+// RBNode A structure of red-black tree node
 type RBNode struct {
+	Key         interface{}
 	Value       interface{}
-	Color       uint8
+	IsRed       bool
 	Parent      *RBNode
 	Left, Right *RBNode
 }
@@ -18,9 +17,8 @@ type RBNode struct {
 func (n *RBNode) getGrandparent() *RBNode {
 	if n.Parent != nil {
 		return n.Parent.Parent
-	} else {
-		return nil
 	}
+	return nil
 }
 
 func (n *RBNode) getUncle() *RBNode {
@@ -30,9 +28,8 @@ func (n *RBNode) getUncle() *RBNode {
 	}
 	if gp.Left == n.Parent {
 		return gp.Right
-	} else {
-		return gp.Left
 	}
+	return gp.Left
 }
 
 func (n *RBNode) getSibling() *RBNode {
@@ -41,9 +38,8 @@ func (n *RBNode) getSibling() *RBNode {
 	}
 	if n == n.Parent.Left {
 		return n.Parent.Right
-	} else {
-		return n.Parent.Left
 	}
+	return n.Parent.Left
 }
 
 func (n *RBNode) rotateLeft() {

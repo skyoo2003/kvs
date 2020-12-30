@@ -1,16 +1,21 @@
+// Package kv implements a key-value storage
 package kv
 
-type KVStore struct {
+// Store A structure of key-value store
+type Store struct {
 }
 
-func (kv *KVStore) Get(key string) (interface{}, error) {
+// Get get a value by key
+func (s *Store) Get(key string) (interface{}, error) {
 	return nil, nil
 }
 
-func (kv *KVStore) Put(key string, value interface{}) error {
+// Put put a value of key
+func (s *Store) Put(key string, value interface{}) error {
 	return nil
 }
 
-func (kv *KVStore) Delete(key string) error {
+// Delete delete a key in store
+func (s *Store) Delete(key string) error {
 	return nil
 }
