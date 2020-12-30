@@ -10,7 +10,7 @@ clean:
 	rm -rf dist/
 
 build:
-	go build -o dist/kvs
+	go build -o dist/kvs ./cmd/kvs
 
 test:
 	go test -v ./...

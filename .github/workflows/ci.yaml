@@ -26,6 +26,6 @@ jobs:
       with:
         version: v1.29
     - name: Go test
-      run: go test -v ./...
+      run: make test
     - name: Go build
-      run: go build
+      run: make build
