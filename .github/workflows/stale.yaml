@@ -1,0 +1,25 @@
+name: "Stale"
+
+on:
+  schedule:
+  - cron: "0 1 * * *"
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/stale@v3
+      with:
+        repo-token: ${{ secrets.REPO_TOKEN }}
+        stale-issue-message: >
+          This issue is stale because it has been open 30 days with no activity.
+          Remove stale label or comment or this will be closed in 5 days.
+        stale-pr-message: >
+          This pull request is stale because it has been open 30 days with no activity.
+          Remove stale label or comment or this will be closed in 5 days.
+        stale-issue-label: "Type: Stale"
+        exempt-issue-labels: "Type: WIP"
+        stale-pr-label: "Type: Stale"
+        exempt-pr-labels: "Type: WIP"
+        days-before-stale: 30
+        days-before-close: 5
