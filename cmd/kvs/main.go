@@ -4,7 +4,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/skyoo2003/kvs/kv"
+	"github.com/skyoo2003/kvs/pkg/kv"
 )
 
 func main() {
