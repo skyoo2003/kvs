@@ -9,7 +9,8 @@ before:
   - go mod download
 
 builds:
-  - binary: kvs
+  - id: kvs
+    binary: kvs
     main: cmd/kvs/main.go
     env:
     - CGO_ENABLED=0
@@ -44,15 +45,20 @@ checksum:
 
 # TODO: brews:
 
-# TODO: dockers:
+dockers:
+- binaries:
+  - kvs
+  builds:
+  - kvs
+  dockerfile: Dockerfile.goreleaser
+  image_templates:
+  - "docker.pkg.github.com/skyoo2003/kvs/kvs:latest-alpine"
+  - "docker.pkg.github.com/skyoo2003/kvs/kvs:{{ .Tag }}-alpine"
+  - "docker.pkg.github.com/skyoo2003/kvs/kvs:v{{ .Major }}-alpine"
+  - "docker.pkg.github.com/skyoo2003/kvs/kvs:v{{ .Major }}.{{ .Minor }}-alpine"
 
 release:
   github:
     owner: skyoo2003
     name: kvs
-  draft: true
   name_template: "v{{ .Version }}"
-
-signs:
-- artifacts: checksum
-  args: ["--batch", "-u", "{{ .Env.GPG_FINGERPRINT }}", "--output", "${signature}", "--detach-sign", "${artifact}"]

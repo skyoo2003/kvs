@@ -1,0 +1,9 @@
+FROM alpine:3.12
+
+VOLUME /kvs
+WORKDIR /kvs
+COPY kvs /usr/bin/kvs
+
+EXPOSE 3456
+
+ENTRYPOINT ["kvs"]

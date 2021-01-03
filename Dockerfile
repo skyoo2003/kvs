@@ -14,11 +14,6 @@ RUN make build
 
 FROM alpine:3.12
 
-RUN apk --no-cache --no-progress add \
-    ca-certificates \
-    curl \
-    git \
-    openssh
 
 VOLUME /kvs
 WORKDIR /kvs
