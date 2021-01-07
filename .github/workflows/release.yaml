@@ -17,10 +17,7 @@ jobs:
         go-version: 1.15
     - name: Get current tag name
       id: getTag
-      uses: olegtarasov/get-tag@v2
-    - name: Get current changelog
-      id: getChangelog
-      run: echo ::set-output name=changelog::$(cat changes/${{ steps.getTag.outputs.tag }}.md)
+      uses: olegtarasov/get-tag@v2.1
     - name: Login to Docker Registry
       run: >
         echo "${{ secrets.GH_PAT }}" |
@@ -29,7 +26,7 @@ jobs:
       uses: goreleaser/goreleaser-action@v2
       with:
         version: latest
-        args: release --rm-dist --release-notes=${{ steps.getChangelog.outputs.changelog }}
+        args: release --rm-dist --release-notes changes/${{ steps.getTag.outputs.tag }}.md
       env:
         GITHUB_TOKEN: ${{ secrets.GH_PAT }}
     - name: Upload assets
