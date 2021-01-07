@@ -33,11 +33,7 @@ archives:
     - CONTRIBUTING.md
 
 changelog:
-  sort: asc
-  filters:
-    exclude:
-    - Merge pull request
-    - Merge branch
+  skip: true
 
 checksum:
   algorithm: sha256
