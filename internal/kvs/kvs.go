@@ -1,5 +1,5 @@
-// Package kv implements a key-value storage
-package kv
+// Package kvs implements a key-value storage
+package kvs
 
 // Store A structure of key-value store
 type Store struct {
