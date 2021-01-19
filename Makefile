@@ -3,8 +3,7 @@
 all: lint test build
 
 setup:
-	pipenv sync -d
-	pipenv run pre-commit install
+	pre-commit install
 
 clean:
 	rm -rf dist/
