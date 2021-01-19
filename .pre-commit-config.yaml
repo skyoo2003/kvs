@@ -3,11 +3,14 @@ repos:
     rev: v3.4.0
     hooks:
       - id: check-added-large-files
-        args: ['--maxkb=10000']
+        args:
+          - "--maxkb=10000"
       - id: check-merge-conflict
       - id: check-executables-have-shebangs
       - id: check-json
       - id: check-yaml
+        args:
+          - "--allow-multiple-documents"
       - id: detect-private-key
       - id: mixed-line-ending
       - id: end-of-file-fixer
@@ -19,3 +22,4 @@ repos:
       - id: go-unit-tests
       - id: go-build
       - id: go-mod-tidy
+exclude: "helm/*"
