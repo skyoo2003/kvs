@@ -12,7 +12,7 @@ WORKDIR /github.com/skyoo2003/kvs
 COPY . .
 RUN make build
 
-FROM alpine:3.12
+FROM alpine:3.13.0
 
 
 VOLUME /kvs
