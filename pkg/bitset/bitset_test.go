@@ -168,7 +168,7 @@ func TestRshift(t *testing.T) {
 
 func BenchmarkSet(b *testing.B) {
 	b.StopTimer()
-	r := rand.New(rand.NewSource(7777)) // nolint
+	r := rand.New(rand.NewSource(7777)) //nolint:gosec // this is not used in a secure application
 	bs := New()
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
@@ -179,7 +179,7 @@ func BenchmarkSet(b *testing.B) {
 
 func BenchmarkTest(b *testing.B) {
 	b.StopTimer()
-	r := rand.New(rand.NewSource(7777)) // nolint
+	r := rand.New(rand.NewSource(7777)) //nolint:gosec // this is not used in a secure application
 	bs := New()
 	for i := 0; i < b.N; i++ {
 		b := uint(r.Intn(math.MaxInt32))
