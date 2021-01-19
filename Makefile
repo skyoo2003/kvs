@@ -3,16 +3,16 @@
 all: lint test build
 
 setup:
-	pre-commit install
+	@pre-commit install
 
 clean:
-	rm -rf dist/
+	@rm -rf dist/
 
 build:
-	go build -o dist/kvs ./cmd/kvs
+	@go build -o dist/kvs ./cmd/kvs
 
 test:
-	go test -v ./...
+	@go test -v ./...
 
 lint:
-	golangci-lint run ./...
+	@golangci-lint run ./...
