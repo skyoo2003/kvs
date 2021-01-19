@@ -35,3 +35,4 @@ jobs:
           charts_dir: helm
         env:
           CR_TOKEN: "${{ secrets.GH_PAT }}"
+          CR_RELEASE_NAME_TEMPLATE: "{{ .Name }}-chart-{{ .Version }}"
