@@ -37,7 +37,7 @@ changelog:
 
 checksum:
   algorithm: sha256
-  name_template: 'checksums.txt'
+  name_template: 'CHECKSUMS'
 
 # TODO: brews:
 
@@ -48,10 +48,10 @@ dockers:
   - kvs
   dockerfile: Dockerfile.goreleaser
   image_templates:
-  - "docker.pkg.github.com/skyoo2003/kvs/kvs:{{ .Tag }}-alpine"
-  - "docker.pkg.github.com/skyoo2003/kvs/kvs:v{{ .Major }}.{{ .Minor }}-alpine"
-  - "docker.pkg.github.com/skyoo2003/kvs/kvs:v{{ .Major }}-alpine"
-  - "docker.pkg.github.com/skyoo2003/kvs/kvs:latest-alpine"
+  - "ghcr.io/skyoo2003/kvs:{{ .Tag }}-alpine"
+  - "ghcr.io/skyoo2003/kvs:v{{ .Major }}.{{ .Minor }}-alpine"
+  - "ghcr.io/skyoo2003/kvs:v{{ .Major }}-alpine"
+  - "ghcr.io/skyoo2003/kvs:latest-alpine"
 
 release:
   github:

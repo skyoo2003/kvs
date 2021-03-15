@@ -1,4 +1,4 @@
-package rbt // nolint
+package rbt
 
 // Compare A function about comparator
 type Compare func(a, b interface{}) int
