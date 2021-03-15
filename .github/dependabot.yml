@@ -9,23 +9,17 @@ updates:
     directory: "/"
     schedule:
       interval: "daily"
-    reviewers:
-      - "skyoo2003"
     assignees:
       - "skyoo2003"
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "daily"
-    reviewers:
-      - "skyoo2003"
     assignees:
       - "skyoo2003"
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
       interval: "daily"
-    reviewers:
-      - "skyoo2003"
     assignees:
       - "skyoo2003"

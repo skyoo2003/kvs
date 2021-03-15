@@ -17,9 +17,9 @@ jobs:
         stale-pr-message: >
           This pull request is stale because it has been open 30 days with no activity.
           Remove stale label or comment or this will be closed in 5 days.
-        stale-issue-label: "Type: Stale"
-        exempt-issue-labels: "Type: WIP"
-        stale-pr-label: "Type: Stale"
-        exempt-pr-labels: "Type: WIP"
+        stale-issue-label: "stale"
+        exempt-issue-labels: "wip"
+        stale-pr-label: "stale"
+        exempt-pr-labels: "wip"
         days-before-stale: 30
         days-before-close: 5

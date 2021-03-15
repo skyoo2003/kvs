@@ -29,7 +29,9 @@ linters-settings:
   goimports:
     local-prefixes: github.com/skyoo2003/kvs
   golint:
-    min-confidence: 0
+    # The package comment is false positive so the min-confidance needs to be set to at least 0.3
+    # Ref https://github.com/golangci/golangci-lint/issues/1556#issuecomment-744021989
+    min-confidence: 0.3
   govet:
     check-shadowing: true
   lll:
@@ -67,7 +69,6 @@ linters:
     - nakedret
     - noctx
     - rowserrcheck
-    - scopelint
     - staticcheck
     - structcheck
     - stylecheck
