@@ -57,7 +57,7 @@ brews:
   name: kvs
   tap:
     owner: skyoo2003
-    name: homebrew-kvs
+    name: homebrew-tap
     token: "{{ .Env.GITHUB_TOKEN }}"
   folder: Formula
   url_template: "http://github.com/skyoo2003/kvs/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
