@@ -2,26 +2,38 @@ project_name: kvs
 
 env:
 - GO111MODULE=on
-- GOPROXY=https://goproxy.io
+- CGO_ENABLED=0
 
 before:
   hooks:
   - go mod download
 
 builds:
-  - id: kvs
-    binary: kvs
-    main: cmd/kvs/main.go
-    env:
-    - CGO_ENABLED=0
-    goos:
-    - darwin
-    - linux
-    goarch:
-    - amd64
+- id: kvs
+  binary: kvs
+  main: cmd/kvs/main.go
+  goos:
+  - darwin
+  - linux
+  - windows
+  goarch:
+  - 386
+  - amd64
+  - arm
+  - arm64
+  goarm:
+  - 6
+  - 7
+  ignore:
+  - goos: darwin
+    goarch: 386
+  - goos: linux
+    goarch: arm
+    goarm: 6
 
 archives:
-- format: tar.gz
+- id: kvs
+  format: tar.gz
   format_overrides:
   - goos: windows
     format: zip
@@ -39,22 +51,48 @@ checksum:
   algorithm: sha256
   name_template: 'CHECKSUMS'
 
-# TODO: brews:
+brews:
+- ids:
+  - kvs
+  name: kvs
+  tap:
+    owner: skyoo2003
+    name: homebrew-kvs
+    token: "{{ .Env.GITHUB_TOKEN }}"
+  folder: Formula
+  url_template: "http://github.com/skyoo2003/kvs/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
+  commit_author:
+    name: Sung-Kyu Yoo
+    email: skyoo2003@gmail.com
+  homepage: "https://github.com/skyoo2003/kvs"
+  description: "A simple key-value store"
+  license: "MIT"
+  test: |
+    system "#{bin}/kvs -v"
+  install: |
+    bin.install "kvs"
+  skip_upload: false
 
 dockers:
-- binaries:
-  - kvs
-  builds:
+- ids:
   - kvs
   dockerfile: Dockerfile.goreleaser
+  use_buildx: true
   image_templates:
   - "ghcr.io/skyoo2003/kvs:{{ .Tag }}-alpine"
   - "ghcr.io/skyoo2003/kvs:v{{ .Major }}.{{ .Minor }}-alpine"
   - "ghcr.io/skyoo2003/kvs:v{{ .Major }}-alpine"
   - "ghcr.io/skyoo2003/kvs:latest-alpine"
+  build_flag_templates:
+  - "--label=org.opencontainers.image.created={{ .Date }}"
+  - "--label=org.opencontainers.image.title={{ .ProjectName }}"
+  - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+  - "--label=org.opencontainers.image.version={{ .Version }}"
+  skip_push: false
 
 release:
   github:
     owner: skyoo2003
     name: kvs
   name_template: "v{{ .Version }}"
+  disable: false

@@ -21,7 +21,7 @@ jobs:
     - name: Login to Docker Registry
       run: >
         echo "${{ secrets.GH_PAT }}" |
-        docker login docker.pkg.github.com -u skyoo2003 --password-stdin
+        docker login ghcr.io -u skyoo2003 --password-stdin
     - name: Execute GoReleaser
       uses: goreleaser/goreleaser-action@v2
       with:
