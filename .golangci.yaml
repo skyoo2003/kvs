@@ -1,8 +1,5 @@
 # https://golangci-lint.run/usage/configuration/
 linters-settings:
-  depguard:
-    list-type: blacklist
-    packages: []
   funlen:
     lines: 100
     statements: 50
@@ -45,8 +42,6 @@ linters:
   disable-all: true
   enable:
     - bodyclose
-    - deadcode
-    - depguard
     - errcheck
     - exhaustive
     - funlen
@@ -56,27 +51,22 @@ linters:
     - gocyclo
     - gofmt
     - goimports
-    - golint
-    - gomnd
     - goprintffuncname
     - gosec
     - gosimple
     - govet
     - ineffassign
-    - interfacer
     - lll
     - misspell
     - nakedret
     - noctx
     - rowserrcheck
     - staticcheck
-    - structcheck
     - stylecheck
     - typecheck
     - unconvert
     - unparam
     - unused
-    - varcheck
     - whitespace
 
 issues:
