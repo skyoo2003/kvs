@@ -18,7 +18,7 @@ var (
 
 const (
 	// DefaultTables default tables size
-	DefaultTables = 2 ^ 20
+	DefaultTables = 1 << 20
 	// MaxReallocCount maximum count of reallocation
 	MaxReallocCount = 1024
 )
@@ -76,7 +76,7 @@ func (f *Filter) Insert(data []byte) error {
 	// If the reallocation fails, an error is returned.
 	idx := randIndices(idx1, idx2)
 	for i := 0; i < MaxReallocCount; i++ {
-		fp = f.tables[i].Swap(fp)
+		fp = f.tables[idx].Swap(fp)
 		idx = f.altIndex(idx, fp)
 		if err := f.tables[idx].Insert(fp); err == nil {
 			f.size++
@@ -105,11 +105,13 @@ func (f *Filter) Lookup(data []byte) bool {
 func (f *Filter) Delete(data []byte) error {
 	idx1, fp := f.index(data), obtainsFingerprint(data)
 	if err := f.tables[idx1].Delete(fp); err == nil {
+		f.size--
 		return nil
 	}
 
 	idx2 := f.altIndex(idx1, fp)
 	if err := f.tables[idx2].Delete(fp); err == nil {
+		f.size--
 		return nil
 	}
 

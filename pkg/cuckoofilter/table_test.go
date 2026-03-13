@@ -133,6 +133,33 @@ func TestTable_Delete(t *testing.T) {
 	}
 }
 
+func TestTable_InsertUsesFreedBucket(t *testing.T) {
+	first := obtainsFingerprint([]byte("first"))
+	second := obtainsFingerprint([]byte("second"))
+	third := obtainsFingerprint([]byte("third"))
+
+	table := &Table{
+		buckets:    []fingerprint{first, second},
+		bucketSize: 2,
+		size:       2,
+	}
+
+	if err := table.Delete(first); err != nil {
+		t.Fatalf("Delete() error = %v", err)
+	}
+
+	if err := table.Insert(third); err != nil {
+		t.Fatalf("Insert() error = %v", err)
+	}
+
+	if table.Index(second) == -1 {
+		t.Fatal("Insert() overwrote an existing fingerprint")
+	}
+	if table.Index(third) == -1 {
+		t.Fatal("Insert() did not place the new fingerprint in the freed bucket")
+	}
+}
+
 func TestTable_Index(t *testing.T) {
 	type fields struct {
 		buckets    []fingerprint
