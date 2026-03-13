@@ -41,9 +41,13 @@ func NewTableWithBucketSize(bucketSize int) *Table {
 // Insert insert a fingerprint into the buckets
 func (t *Table) Insert(fp fingerprint) error {
 	if t.size < t.bucketSize {
-		t.buckets[t.size] = fp
-		t.size++
-		return nil
+		for i, bucket := range t.buckets {
+			if bucket == 0 {
+				t.buckets[i] = fp
+				t.size++
+				return nil
+			}
+		}
 	}
 	return ErrTableIsFull
 }

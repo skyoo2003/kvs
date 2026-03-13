@@ -6,16 +6,34 @@ A simple key-value store
 ## Installation
 
 ```sh
-$ go get -u https://github.com/skyoo2003/kvs/cmd/kvs
+$ go install github.com/skyoo2003/kvs/cmd/kvs@latest
 ```
 
 ## Documentation
 
-_TBD_
+Import `github.com/skyoo2003/kvs` when you want a small in-memory store inside a Go program.
+
+```go
+package main
+
+import (
+	"fmt"
+
+	"github.com/skyoo2003/kvs"
+)
+
+func main() {
+	store := kvs.NewStore()
+	_ = store.Put("language", "go")
+
+	value, _ := store.Get("language")
+	fmt.Println(value)
+}
+```
 
 ## Contributing
 
-_TBD_
+See `CONTRIBUTING.md` for the project contribution process.
 
 ## [License](LICENSE)
 

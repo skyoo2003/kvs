@@ -12,6 +12,8 @@ builds:
 - id: kvs
   binary: kvs
   main: cmd/kvs/main.go
+  ldflags:
+  - -s -w -X main.version={{ .Version }}
   goos:
   - darwin
   - linux
