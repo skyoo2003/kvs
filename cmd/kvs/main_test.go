@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -112,15 +111,15 @@ func withVersion(want string, fn func()) {
 }
 
 func osWriteFile(name string, data []byte) error {
-	return ioutil.WriteFile(name, data, 0o600)
+	return os.WriteFile(name, data, 0o600)
 }
 
 func mustTempDir(t *testing.T) string {
 	t.Helper()
 
-	dir, err := ioutil.TempDir("", "kvs-cli-test-")
+	dir, err := os.MkdirTemp("", "kvs-cli-test-")
 	if err != nil {
-		t.Fatalf("ioutil.TempDir() error = %v", err)
+		t.Fatalf("os.MkdirTemp() error = %v", err)
 	}
 
 	return dir

@@ -4,6 +4,7 @@ package cuckoofilter
 import (
 	"errors"
 	"math/rand"
+	"sync"
 	"time"
 
 	"github.com/cespare/xxhash/v2"
@@ -23,10 +24,10 @@ const (
 	MaxReallocCount = 1024
 )
 
-// nolint:gochecknoinits
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
+var (
+	rngMu sync.Mutex
+	rng   = rand.New(rand.NewSource(time.Now().UnixNano())) //nolint:gosec // this is not used in a secure application
+)
 
 // Filter implements Cuckoo-filter
 type Filter struct {
@@ -119,9 +120,25 @@ func (f *Filter) Delete(data []byte) error {
 }
 
 func (f *Filter) index(data []byte) int {
-	return int(xxhash.Sum64(data) % uint64(f.tableSize))
+	return intFromUint64(xxhash.Sum64(data) % tableSizeUint64(f.tableSize))
 }
 
 func (f *Filter) altIndex(idx int, fp fingerprint) int {
 	return (idx ^ f.index(getBytesByFingerprint(fp))) % f.tableSize
+}
+
+func tableSizeUint64(size int) uint64 {
+	if size <= 0 {
+		return 1
+	}
+
+	return uint64(size)
+}
+
+func intFromUint64(value uint64) int {
+	if value > uint64(^uint(0)>>1) {
+		panic("index overflow")
+	}
+
+	return int(value)
 }

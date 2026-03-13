@@ -2,6 +2,7 @@
 package bitset
 
 import (
+	"math"
 	"math/big"
 	"math/bits"
 )
@@ -18,19 +19,27 @@ func New() *BitSet {
 
 // Test whether the bit at i is set
 func (bs *BitSet) Test(i uint) bool {
-	return bs.v.Bit(int(i)) == 1
+	return bs.v.Bit(bitIndex(i)) == 1
 }
 
 // Set set the bit at i to be 1
 func (bs *BitSet) Set(i uint) *BitSet {
-	bs.v.SetBit(&bs.v, int(i), 1)
+	bs.v.SetBit(&bs.v, bitIndex(i), 1)
 	return bs
 }
 
 // Reset set the bit at i to be 0
 func (bs *BitSet) Reset(i uint) *BitSet {
-	bs.v.SetBit(&bs.v, int(i), 0)
+	bs.v.SetBit(&bs.v, bitIndex(i), 0)
 	return bs
+}
+
+func bitIndex(i uint) int {
+	if i > uint(math.MaxInt) {
+		panic("bit index overflow")
+	}
+
+	return int(i)
 }
 
 // Flip flip the bit at i

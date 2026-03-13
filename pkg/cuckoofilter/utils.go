@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"math"
-	"math/rand"
 
 	"github.com/cespare/xxhash/v2"
 )
@@ -14,7 +13,12 @@ const maxIndices = 2
 type fingerprint uint16
 
 func obtainsFingerprint(data []byte) fingerprint {
-	return fingerprint(xxhash.Sum64(data)%(math.MaxUint16-1) + 1)
+	value := xxhash.Sum64(data)%(math.MaxUint16-1) + 1
+	if value > math.MaxUint16 {
+		panic("fingerprint overflow")
+	}
+
+	return fingerprint(uint16(value))
 }
 
 func getBytesByFingerprint(fp fingerprint) []byte {
@@ -26,8 +30,10 @@ func getBytesByFingerprint(fp fingerprint) []byte {
 }
 
 func randIndices(idx1, idx2 int) int {
-	// nolint:gosec
-	if v := rand.Intn(maxIndices); v == 0 {
+	rngMu.Lock()
+	v := rng.Intn(maxIndices) //nolint:gosec // this is not used in a secure application
+	rngMu.Unlock()
+	if v == 0 {
 		return idx1
 	}
 	return idx2

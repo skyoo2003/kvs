@@ -118,7 +118,11 @@ func removeAndVerifyEntry(t *testing.T, tree *RBTree, entries []struct {
 		t.Fatalf("Remove(%v) error = %v", removedKey, err)
 	}
 	assertValidTree(t, tree)
-	if tree.Size() != uint(len(entries)-1) {
+	wantSize := uint(0)
+	for range entries[:len(entries)-1] {
+		wantSize++
+	}
+	if tree.Size() != wantSize {
 		t.Fatalf("Size() after remove = %v, want %v", tree.Size(), len(entries)-1)
 	}
 	_, err = tree.Get(removedKey)

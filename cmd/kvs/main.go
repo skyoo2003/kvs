@@ -54,6 +54,7 @@ func newRootCmd(stdout, stderr io.Writer) *cobra.Command {
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file path")
 	rootCmd.Flags().BoolVarP(&showVersion, "version", "v", false, "print version")
 	rootCmd.AddCommand(newVersionCmd())
+	rootCmd.AddCommand(newServeCmd())
 
 	return rootCmd
 }
