@@ -1,4 +1,4 @@
-FROM golang:1.16.4-alpine3.12 AS builder
+FROM golang:1.24-alpine AS builder
 
 ENV CGO_ENABLED=0
 ENV GO111MODULE=on
@@ -12,7 +12,7 @@ WORKDIR /github.com/skyoo2003/kvs
 COPY . .
 RUN make build
 
-FROM alpine:3.14.0
+FROM alpine:3.20
 
 
 VOLUME /kvs
