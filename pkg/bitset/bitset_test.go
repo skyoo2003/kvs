@@ -172,7 +172,7 @@ func BenchmarkSet(b *testing.B) {
 	bs := New()
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
-		b := uint(r.Intn(math.MaxInt32))
+		b := uint(r.Uint32() % uint32(math.MaxInt32))
 		bs.Set(b)
 	}
 }
@@ -182,12 +182,12 @@ func BenchmarkTest(b *testing.B) {
 	r := rand.New(rand.NewSource(7777)) //nolint:gosec // this is not used in a secure application
 	bs := New()
 	for i := 0; i < b.N; i++ {
-		b := uint(r.Intn(math.MaxInt32))
+		b := uint(r.Uint32() % uint32(math.MaxInt32))
 		bs.Set(b)
 	}
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
-		b := uint(r.Intn(math.MaxInt32))
+		b := uint(r.Uint32() % uint32(math.MaxInt32))
 		bs.Test(b)
 	}
 }
@@ -198,7 +198,7 @@ func BenchmarkFlip(b *testing.B) {
 	bs := New()
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
-		b := uint(r.Intn(math.MaxInt32))
+		b := uint(r.Uint32() % uint32(math.MaxInt32))
 		bs.Flip(b)
 	}
 }
@@ -208,7 +208,7 @@ func BenchmarkAll(b *testing.B) {
 	r := rand.New(rand.NewSource(7777)) // nolint
 	bs := New()
 	for i := 0; i < b.N; i++ {
-		b := uint(r.Intn(math.MaxInt32))
+		b := uint(r.Uint32() % uint32(math.MaxInt32))
 		bs.Set(b)
 	}
 	b.StartTimer()
@@ -222,7 +222,7 @@ func BenchmarkAny(b *testing.B) {
 	r := rand.New(rand.NewSource(7777)) // nolint
 	bs := New()
 	for i := 0; i < b.N; i++ {
-		b := uint(r.Intn(math.MaxInt32))
+		b := uint(r.Uint32() % uint32(math.MaxInt32))
 		bs.Set(b)
 	}
 	b.StartTimer()
@@ -236,7 +236,7 @@ func BenchmarkCount(b *testing.B) {
 	r := rand.New(rand.NewSource(7777)) // nolint
 	bs := New()
 	for i := 0; i < b.N; i++ {
-		b := uint(r.Intn(math.MaxInt32))
+		b := uint(r.Uint32() % uint32(math.MaxInt32))
 		bs.Set(b)
 	}
 	b.StartTimer()
@@ -250,7 +250,7 @@ func BenchmarkSize(b *testing.B) {
 	r := rand.New(rand.NewSource(7777)) // nolint
 	bs := New()
 	for i := 0; i < b.N; i++ {
-		b := uint(r.Intn(math.MaxInt32))
+		b := uint(r.Uint32() % uint32(math.MaxInt32))
 		bs.Set(b)
 	}
 	b.StartTimer()
@@ -264,9 +264,9 @@ func BenchmarkAnd(b *testing.B) {
 	r := rand.New(rand.NewSource(7777)) // nolint
 	bs1, bs2 := New(), New()
 	for i := 0; i < b.N; i++ {
-		b1 := uint(r.Intn(math.MaxInt32))
+		b1 := uint(r.Uint32() % uint32(math.MaxInt32))
 		bs1.Set(b1)
-		b2 := uint(r.Intn(math.MaxInt32))
+		b2 := uint(r.Uint32() % uint32(math.MaxInt32))
 		bs2.Set(b2)
 	}
 	b.StartTimer()
@@ -280,9 +280,9 @@ func BenchmarkOr(b *testing.B) {
 	r := rand.New(rand.NewSource(7777)) // nolint
 	bs1, bs2 := New(), New()
 	for i := 0; i < b.N; i++ {
-		b1 := uint(r.Intn(math.MaxInt32))
+		b1 := uint(r.Uint32() % uint32(math.MaxInt32))
 		bs1.Set(b1)
-		b2 := uint(r.Intn(math.MaxInt32))
+		b2 := uint(r.Uint32() % uint32(math.MaxInt32))
 		bs2.Set(b2)
 	}
 	b.StartTimer()
@@ -296,9 +296,9 @@ func BenchmarkXor(b *testing.B) {
 	r := rand.New(rand.NewSource(7777)) // nolint
 	bs1, bs2 := New(), New()
 	for i := 0; i < b.N; i++ {
-		b1 := uint(r.Intn(math.MaxInt32))
+		b1 := uint(r.Uint32() % uint32(math.MaxInt32))
 		bs1.Set(b1)
-		b2 := uint(r.Intn(math.MaxInt32))
+		b2 := uint(r.Uint32() % uint32(math.MaxInt32))
 		bs2.Set(b2)
 	}
 	b.StartTimer()
@@ -312,7 +312,7 @@ func BenchmarkNot(b *testing.B) {
 	r := rand.New(rand.NewSource(7777)) // nolint
 	bs := New()
 	for i := 0; i < b.N; i++ {
-		b := uint(r.Intn(math.MaxInt32))
+		b := uint(r.Uint32() % uint32(math.MaxInt32))
 		bs.Set(b)
 	}
 	b.StartTimer()
@@ -326,7 +326,7 @@ func BenchmarkLshift(b *testing.B) {
 	r := rand.New(rand.NewSource(7777)) // nolint
 	bs := New()
 	for i := 0; i < b.N; i++ {
-		b := uint(r.Intn(math.MaxInt32))
+		b := uint(r.Uint32() % uint32(math.MaxInt32))
 		bs.Set(b)
 	}
 	b.StartTimer()
@@ -340,7 +340,7 @@ func BenchmarkRshift(b *testing.B) {
 	r := rand.New(rand.NewSource(7777)) // nolint
 	bs := New()
 	for i := 0; i < b.N; i++ {
-		b := uint(r.Intn(math.MaxInt32))
+		b := uint(r.Uint32() % uint32(math.MaxInt32))
 		bs.Set(b)
 	}
 	b.StartTimer()
