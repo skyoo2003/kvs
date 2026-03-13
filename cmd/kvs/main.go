@@ -19,14 +19,14 @@ func main() {
 	}
 }
 
-func execute(args []string, stdout io.Writer, stderr io.Writer) error {
+func execute(args []string, stdout, stderr io.Writer) error {
 	cmd := newRootCmd(stdout, stderr)
 	cmd.SetArgs(args)
 
 	return cmd.Execute()
 }
 
-func newRootCmd(stdout io.Writer, stderr io.Writer) *cobra.Command {
+func newRootCmd(stdout, stderr io.Writer) *cobra.Command {
 	var cfgFile string
 	var showVersion bool
 

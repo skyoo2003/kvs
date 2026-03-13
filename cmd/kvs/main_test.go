@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,6 +10,8 @@ import (
 
 	"github.com/spf13/viper"
 )
+
+const testVersionOutput = "1.2.3\n"
 
 func TestExecuteShowsHelpByDefault(t *testing.T) {
 	out, errOut, err := runCLI(t)
@@ -27,7 +30,7 @@ func TestExecuteShowsHelpByDefault(t *testing.T) {
 }
 
 func TestExecuteVersionFlag(t *testing.T) {
-	withVersion(t, "1.2.3", func() {
+	withVersion("1.2.3", func() {
 		out, errOut, err := runCLI(t, "-v")
 		if err != nil {
 			t.Fatalf("execute(-v) error = %v", err)
@@ -35,14 +38,14 @@ func TestExecuteVersionFlag(t *testing.T) {
 		if errOut != "" {
 			t.Fatalf("stderr = %q, want empty", errOut)
 		}
-		if out != "1.2.3\n" {
-			t.Fatalf("stdout = %q, want %q", out, "1.2.3\n")
+		if out != testVersionOutput {
+			t.Fatalf("stdout = %q, want %q", out, testVersionOutput)
 		}
 	})
 }
 
 func TestExecuteVersionCommand(t *testing.T) {
-	withVersion(t, "1.2.3", func() {
+	withVersion("1.2.3", func() {
 		out, errOut, err := runCLI(t, "version")
 		if err != nil {
 			t.Fatalf("execute(version) error = %v", err)
@@ -50,21 +53,27 @@ func TestExecuteVersionCommand(t *testing.T) {
 		if errOut != "" {
 			t.Fatalf("stderr = %q, want empty", errOut)
 		}
-		if out != "1.2.3\n" {
-			t.Fatalf("stdout = %q, want %q", out, "1.2.3\n")
+		if out != testVersionOutput {
+			t.Fatalf("stdout = %q, want %q", out, testVersionOutput)
 		}
 	})
 }
 
 func TestExecuteMissingConfigFile(t *testing.T) {
-	_, _, err := runCLI(t, "--config", filepath.Join(t.TempDir(), "missing.yaml"))
+	tempDir := mustTempDir(t)
+	defer mustRemoveAll(t, tempDir)
+
+	_, _, err := runCLI(t, "--config", filepath.Join(tempDir, "missing.yaml"))
 	if err == nil {
 		t.Fatal("execute() error = nil, want config read error")
 	}
 }
 
 func TestExecuteReadsConfigFile(t *testing.T) {
-	configFile := filepath.Join(t.TempDir(), "config.yaml")
+	tempDir := mustTempDir(t)
+	defer mustRemoveAll(t, tempDir)
+
+	configFile := filepath.Join(tempDir, "config.yaml")
 	if writeErr := osWriteFile(configFile, []byte("name: kvs\n")); writeErr != nil {
 		t.Fatalf("osWriteFile() error = %v", writeErr)
 	}
@@ -81,28 +90,46 @@ func TestExecuteReadsConfigFile(t *testing.T) {
 	}
 }
 
-func runCLI(t *testing.T, args ...string) (string, string, error) {
+func runCLI(t *testing.T, args ...string) (stdout, stderr string, err error) {
 	t.Helper()
+	defer viper.Reset()
 	viper.Reset()
-	t.Cleanup(viper.Reset)
 
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	err := execute(args, &stdout, &stderr)
+	var stdoutBuf bytes.Buffer
+	var stderrBuf bytes.Buffer
+	err = execute(args, &stdoutBuf, &stderrBuf)
 
-	return stdout.String(), stderr.String(), err
+	return stdoutBuf.String(), stderrBuf.String(), err
 }
 
-func withVersion(t *testing.T, want string, fn func()) {
-	t.Helper()
+func withVersion(want string, fn func()) {
 	oldVersion := version
 	version = want
-	t.Cleanup(func() {
+	defer func() {
 		version = oldVersion
-	})
+	}()
 	fn()
 }
 
 func osWriteFile(name string, data []byte) error {
-	return os.WriteFile(name, data, 0o600)
+	return ioutil.WriteFile(name, data, 0o600)
+}
+
+func mustTempDir(t *testing.T) string {
+	t.Helper()
+
+	dir, err := ioutil.TempDir("", "kvs-cli-test-")
+	if err != nil {
+		t.Fatalf("ioutil.TempDir() error = %v", err)
+	}
+
+	return dir
+}
+
+func mustRemoveAll(t *testing.T, path string) {
+	t.Helper()
+
+	if err := os.RemoveAll(path); err != nil {
+		t.Fatalf("os.RemoveAll() error = %v", err)
+	}
 }
