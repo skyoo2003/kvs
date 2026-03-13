@@ -17,6 +17,12 @@ $ changie merge
 
 The release workflow lives in `.github/workflows/release.yaml` and runs when a tag matching `v*` is pushed.
 
+## Project Release
+
+For an application release, prepare the changelog with `changie`, push a version tag such as `v1.2.3`, and let the `Release` workflow publish the artifacts defined in `.goreleaser.yml`.
+
+After the tag is pushed, verify that the `Release` workflow succeeds and that the GitHub release contains the expected binaries and archives.
+
 ## Documentation Site Release
 
 The documentation workflow lives in `.github/workflows/docs.yaml`.
