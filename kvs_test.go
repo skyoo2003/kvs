@@ -20,7 +20,8 @@ func TestStorePutGetDelete(t *testing.T) {
 		t.Fatalf("Get() = %v, want %v", got, "kvs")
 	}
 
-	if err := store.Delete("name"); err != nil {
+	err = store.Delete("name")
+	if err != nil {
 		t.Fatalf("Delete() error = %v", err)
 	}
 
