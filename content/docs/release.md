@@ -3,7 +3,7 @@ title: "Release Process"
 weight: 4
 ---
 
-The repository tracks release notes in `docs/RELEASE.md`, automates tagged releases with GitHub Actions, and publishes the documentation site through `gh-pages`.
+The repository tracks release notes in `docs/RELEASE.md`, automates tagged releases with GitHub Actions, and publishes the documentation site through GitHub Pages Actions.
 
 ## Commands
 
@@ -27,9 +27,9 @@ After the tag is pushed, verify that the `Release` workflow succeeds and that th
 
 The documentation workflow lives in `.github/workflows/docs.yaml`.
 
-When a docs-related change is pushed to `main`, GitHub Actions builds the Hugo site and deploys the generated `public/` directory to the `gh-pages` branch.
+When a docs-related change is pushed to `main`, GitHub Actions builds the Hugo site, uploads the generated `public/` directory as a Pages artifact, and deploys it through GitHub Pages.
 
-For this to publish correctly, repository settings must point GitHub Pages at the `gh-pages` branch root.
+For this to publish correctly, repository settings must point GitHub Pages at GitHub Actions.
 
 After a merge, verify that the `Docs` workflow succeeds and that the site is available at `https://skyoo2003.github.io/kvs/`.
 
