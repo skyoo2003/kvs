@@ -6,12 +6,24 @@ on:
     - main
     paths:
     - "**/*.go"
+    - "go.mod"
+    - "go.sum"
+    - "README.md"
+    - ".goreleaser.yml"
+    - "Makefile"
+    - ".github/workflows/*.yaml"
     - "**/*.tmpl"
   pull_request:
     branches:
     - main
     paths:
     - "**/*.go"
+    - "go.mod"
+    - "go.sum"
+    - "README.md"
+    - ".goreleaser.yml"
+    - "Makefile"
+    - ".github/workflows/*.yaml"
     - "**/*.tmpl"
 
 jobs:
