@@ -6,8 +6,23 @@ A simple key-value store
 ## Installation
 
 ```sh
-$ go install github.com/skyoo2003/kvs/cmd/kvs@latest
+$ git clone https://github.com/skyoo2003/kvs.git
+$ cd kvs
+$ go install ./cmd/kvs
 ```
+
+## CLI
+
+The `kvs` binary exposes a small Cobra-based CLI.
+
+```sh
+$ kvs --help
+$ kvs -v
+$ kvs version
+$ kvs --config config.yaml version
+```
+
+Use `--config` when you want to load a specific Viper-compatible config file.
 
 ## Documentation
 
