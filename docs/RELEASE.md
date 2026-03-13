@@ -37,7 +37,7 @@ After pushing the tag, confirm that the `Release` workflow succeeds and that the
 
 ## Documentation Site Release
 
-The static documentation site is built with Hugo and published to the `gh-pages` branch.
+The static documentation site is built with Hugo and published through GitHub Pages Actions.
 
 ### Trigger
 
@@ -56,11 +56,12 @@ The docs workflow runs on pushes to `main` when one of these paths changes:
 
 1. GitHub Actions runs `.github/workflows/docs.yaml`
 2. Hugo builds the site into `public/`
-3. `JamesIves/github-pages-deploy-action` publishes `public/` to the `gh-pages` branch
+3. `actions/upload-pages-artifact` uploads `public/` as the Pages artifact
+4. `actions/deploy-pages` publishes that artifact to GitHub Pages
 
 ### Repository Setting
 
-GitHub Pages must be configured to serve from the `gh-pages` branch root.
+GitHub Pages must be configured to deploy from GitHub Actions.
 
 ### Verification
 

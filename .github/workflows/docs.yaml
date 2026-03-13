@@ -28,7 +28,13 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
 
 jobs:
   docs:
@@ -39,6 +45,9 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
       - name: Set up Hugo
         uses: peaceiris/actions-hugo@v3
         with:
@@ -47,10 +56,19 @@ jobs:
       - name: Build documentation site
         run: hugo build --gc --minify
 
-      - name: Deploy documentation site
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: JamesIves/github-pages-deploy-action@v4
+      - name: Upload documentation artifact
+        uses: actions/upload-pages-artifact@v4
         with:
-          branch: gh-pages
-          folder: public
-          clean: true
+          path: public
+
+  deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: docs
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy documentation site
+        id: deployment
+        uses: actions/deploy-pages@v4
