@@ -1,0 +1,16 @@
+baseURL = 'https://skyoo2003.github.io/kvs/'
+languageCode = 'en-us'
+title = 'KVS Documentation'
+
+[menu]
+  [[menu.main]]
+    name = "Home"
+    url = "/"
+    weight = 1
+  [[menu.main]]
+    name = "Documentation"
+    url = "/docs/"
+    weight = 2
+
+[markup.goldmark.renderer]
+  unsafe = true
