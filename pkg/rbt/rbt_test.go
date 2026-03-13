@@ -21,14 +21,20 @@ func TestRBTreePublicAPI(t *testing.T) {
 		t.Fatalf("New() error = %v", err)
 	}
 
-	if !tree.Empty() {
-		t.Fatal("Empty() = false, want true")
-	}
-	if tree.Size() != 0 {
-		t.Fatalf("Size() = %v, want %v", tree.Size(), 0)
-	}
+	entries := rbTreeEntries()
+	assertTreeStartsEmpty(t, tree)
+	insertEntries(t, tree, entries)
+	assertTreeTracksInsertedEntries(t, tree, entries)
+	updateAndVerifyEntry(t, tree, 20, "updated", uint(len(entries)))
+	removeAndVerifyEntry(t, tree, entries, 20)
+	assertTreeCanBeCleared(t, tree)
+}
 
-	entries := []struct {
+func rbTreeEntries() []struct {
+	key   int
+	value string
+} {
+	return []struct {
 		key   int
 		value string
 	}{
@@ -39,13 +45,39 @@ func TestRBTreePublicAPI(t *testing.T) {
 		{key: 25, value: "twenty-five"},
 		{key: 5, value: "five"},
 	}
+}
+
+func assertTreeStartsEmpty(t *testing.T, tree *RBTree) {
+	t.Helper()
+
+	if !tree.Empty() {
+		t.Fatal("Empty() = false, want true")
+	}
+	if tree.Size() != 0 {
+		t.Fatalf("Size() = %v, want %v", tree.Size(), 0)
+	}
+}
+
+func insertEntries(t *testing.T, tree *RBTree, entries []struct {
+	key   int
+	value string
+}) {
+	t.Helper()
 
 	for _, entry := range entries {
-		if err := tree.Put(entry.key, entry.value); err != nil {
+		err := tree.Put(entry.key, entry.value)
+		if err != nil {
 			t.Fatalf("Put(%v) error = %v", entry.key, err)
 		}
 		assertValidTree(t, tree)
 	}
+}
+
+func assertTreeTracksInsertedEntries(t *testing.T, tree *RBTree, entries []struct {
+	key   int
+	value string
+}) {
+	t.Helper()
 
 	if tree.Empty() {
 		t.Fatal("Empty() = true, want false")
@@ -53,42 +85,62 @@ func TestRBTreePublicAPI(t *testing.T) {
 	if tree.Size() != uint(len(entries)) {
 		t.Fatalf("Size() = %v, want %v", tree.Size(), len(entries))
 	}
+}
 
-	if err := tree.Put(20, "updated"); err != nil {
+func updateAndVerifyEntry(t *testing.T, tree *RBTree, key int, value string, expectedSize uint) {
+	t.Helper()
+
+	err := tree.Put(key, value)
+	if err != nil {
 		t.Fatalf("Put(update) error = %v", err)
 	}
-	if tree.Size() != uint(len(entries)) {
-		t.Fatalf("Size() after update = %v, want %v", tree.Size(), len(entries))
+	if tree.Size() != expectedSize {
+		t.Fatalf("Size() after update = %v, want %v", tree.Size(), expectedSize)
 	}
 
-	value, err := tree.Get(20)
+	got, err := tree.Get(key)
 	if err != nil {
-		t.Fatalf("Get(20) error = %v", err)
+		t.Fatalf("Get(%v) error = %v", key, err)
 	}
-	if value != "updated" {
-		t.Fatalf("Get(20) = %v, want %v", value, "updated")
+	if got != value {
+		t.Fatalf("Get(%v) = %v, want %v", key, got, value)
 	}
+}
 
-	if err := tree.Remove(20); err != nil {
-		t.Fatalf("Remove(20) error = %v", err)
+func removeAndVerifyEntry(t *testing.T, tree *RBTree, entries []struct {
+	key   int
+	value string
+}, removedKey int) {
+	t.Helper()
+
+	err := tree.Remove(removedKey)
+	if err != nil {
+		t.Fatalf("Remove(%v) error = %v", removedKey, err)
 	}
 	assertValidTree(t, tree)
 	if tree.Size() != uint(len(entries)-1) {
 		t.Fatalf("Size() after remove = %v, want %v", tree.Size(), len(entries)-1)
 	}
-	if _, err := tree.Get(20); !errors.Is(err, ErrKeyNotFound) {
-		t.Fatalf("Get(20) after remove error = %v, want %v", err, ErrKeyNotFound)
+	_, err = tree.Get(removedKey)
+	if !errors.Is(err, ErrKeyNotFound) {
+		t.Fatalf("Get(%v) after remove error = %v, want %v", removedKey, err, ErrKeyNotFound)
 	}
 	for _, entry := range entries {
-		if entry.key == 20 {
+		if entry.key == removedKey {
 			continue
 		}
-		if value, err := tree.Get(entry.key); err != nil || value != entry.value {
-			t.Fatalf("Get(%v) = (%v, %v), want (%v, nil)", entry.key, value, err, entry.value)
+		got, getErr := tree.Get(entry.key)
+		if getErr != nil || got != entry.value {
+			t.Fatalf("Get(%v) = (%v, %v), want (%v, nil)", entry.key, got, getErr, entry.value)
 		}
 	}
+}
 
-	if err := tree.Clear(); err != nil {
+func assertTreeCanBeCleared(t *testing.T, tree *RBTree) {
+	t.Helper()
+
+	err := tree.Clear()
+	if err != nil {
 		t.Fatalf("Clear() error = %v", err)
 	}
 	if !tree.Empty() {
