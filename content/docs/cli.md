@@ -3,22 +3,35 @@ title: "CLI Usage"
 weight: 2
 ---
 
-The `kvs` binary exposes a small Cobra-based CLI for interacting with the key-value store.
+The `kvs` binary exposes a Cobra-based CLI for interacting with the key-value store.
 
-## Basic Commands
+## Commands
+
+### `serve`
+
+Start the HTTP and gRPC servers.
 
 ```sh
-$ kvs --help
-$ kvs -v
-$ kvs version
+$ kvs serve
+$ kvs serve --http-addr :8080
+$ kvs serve --grpc-addr :50051
+$ kvs serve --http-addr :8080 --grpc-addr :50051
+$ kvs --config config.yaml serve
 ```
 
-## Configuration
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--http-addr` | HTTP listen address | `:3456` |
+| `--grpc-addr` | gRPC listen address | `:3457` |
+| `--config` | Path to Viper-compatible config file | — |
 
-Use `--config` to load a specific Viper-compatible configuration file:
+### `version`
+
+Print the CLI version.
 
 ```sh
-$ kvs --config config.yaml version
+$ kvs version
+$ kvs -v
 ```
 
 ## Available Flags
@@ -31,4 +44,6 @@ $ kvs --config config.yaml version
 
 ## Further Reading
 
-For Go API usage, see the [Overview](../overview/) documentation or the [Go package reference](https://pkg.go.dev/github.com/skyoo2003/kvs).
+- [Overview](../overview/) — library usage and installation
+- [HTTP API](../http-api/) — REST endpoint details
+- [Go package reference](https://pkg.go.dev/github.com/skyoo2003/kvs)

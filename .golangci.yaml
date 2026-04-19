@@ -25,16 +25,17 @@ linters-settings:
     min-complexity: 15
   goimports:
     local-prefixes: github.com/skyoo2003/kvs
-  golint:
-    # The package comment is false positive so the min-confidance needs to be set to at least 0.3
-    # Ref https://github.com/golangci/golangci-lint/issues/1556#issuecomment-744021989
-    min-confidence: 0.3
+  revive:
+    rules:
+      - name: exported
+        disabled: true
   govet:
     check-shadowing: true
   lll:
     line-length: 120
-  maligned:
-    suggest-new: true
+  govet:
+    enable:
+      - fieldalignment
   misspell:
     locale: US
 
@@ -52,6 +53,7 @@ linters:
     - gofmt
     - goimports
     - goprintffuncname
+    - revive
     - gosec
     - gosimple
     - govet

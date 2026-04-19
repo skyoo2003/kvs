@@ -3,26 +3,48 @@ title: "Overview"
 weight: 1
 ---
 
-KVS is a simple key-value store written in Go. It provides an in-memory store that can be used as a library within Go programs or via its command-line interface.
+KVS is a key-value store written in Go. It provides an in-memory store that can be used as a library, via its CLI, or as a server with HTTP and gRPC interfaces.
 
 ## Features
 
-- In-memory key-value storage
-- Clean Go API for programmatic use
-- Cobra-based CLI for command-line operations
-- Viper configuration support
+- **In-memory key-value store** — thread-safe `Store` with `Get`, `Put`, `Delete`
+- **HTTP server** — JSON REST API at `/v1/keys/{key}` with health check at `/healthz`
+- **gRPC server** — protobuf-based KV service with gRPC health checking
+- **Cobra/Viper CLI** — `serve` command with configurable listen addresses
+- **Library** — import `github.com/skyoo2003/kvs` directly in Go programs
+- **Docker** — container images published to `ghcr.io/skyoo2003/kvs`
 
 ## Installation
 
-Clone and install the CLI:
+### From source
 
 ```sh
-$ git clone https://github.com/skyoo2003/kvs.git
-$ cd kvs
-$ go install ./cmd/kvs
+go install github.com/skyoo2003/kvs/cmd/kvs@latest
 ```
 
-## Library Usage
+### Docker
+
+```sh
+docker run ghcr.io/skyoo2003/kvs:latest-alpine
+```
+
+### Homebrew
+
+```sh
+brew install skyoo2003/tap/kvs
+```
+
+## Quick Start
+
+### CLI
+
+```sh
+kvs serve                     # start HTTP (:3456) and gRPC (:3457) servers
+kvs serve --http-addr :8080   # custom HTTP address
+kvs version                   # print version
+```
+
+### Library
 
 Import `github.com/skyoo2003/kvs` to use KVS as a library:
 
@@ -31,7 +53,6 @@ package main
 
 import (
 	"fmt"
-
 	"github.com/skyoo2003/kvs"
 )
 

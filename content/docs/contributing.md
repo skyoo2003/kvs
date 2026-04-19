@@ -3,22 +3,26 @@ title: "Contributing"
 weight: 3
 ---
 
-Contribution guidance is still being documented.
+Contributions are welcome! See [`CONTRIBUTING.md`](https://github.com/skyoo2003/kvs/blob/main/CONTRIBUTING.md) for the full guide.
 
-## Current Status
+## Quick Start
 
-The repository currently keeps its contribution guide in `CONTRIBUTING.md`, which is marked as `_TBD_`.
+1. **Fork** the repository
+2. **Clone** your fork and run `go mod download`
+3. **Make changes** — run `make all` to verify lint, tests, and build pass
+4. **Open a Pull Request** against `main`
 
-## Repository Links
+## Development Commands
 
-- [Repository on GitHub](https://github.com/skyoo2003/kvs)
-- [Project README](https://github.com/skyoo2003/kvs/blob/main/README.md)
-- [Current contributing file](https://github.com/skyoo2003/kvs/blob/main/CONTRIBUTING.md)
+```sh
+make all       # lint + test + build
+make test      # run tests
+make lint      # run golangci-lint
+make build     # build binary
+```
 
-## Contributing Today
+## PR Guidelines
 
-Until the dedicated guide is expanded, use the existing repository files and open a pull request with the proposed change.
-
-## Note
-
-This page summarizes the current contribution information available in the repository.
+- Keep PRs small and focused on a single concern
+- Include tests for new functionality
+- Ensure `make all` passes before pushing

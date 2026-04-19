@@ -45,6 +45,7 @@ archives:
     - CHANGELOG.md
     - CODE_OF_CONDUCT.md
     - CONTRIBUTING.md
+    - SECURITY.md
 
 changelog:
   skip: true
@@ -62,7 +63,7 @@ brews:
     name: homebrew-tap
     token: "{{ .Env.GITHUB_TOKEN }}"
   folder: Formula
-  url_template: "http://github.com/skyoo2003/kvs/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
+  url_template: "https://github.com/skyoo2003/kvs/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
   commit_author:
     name: Sung-Kyu Yoo
     email: skyoo2003@gmail.com

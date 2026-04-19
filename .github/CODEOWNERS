@@ -1,0 +1,30 @@
+# CODEOWNERS
+
+# Default owner for everything
+* @skyoo2003
+
+# CLI
+/cmd/ @skyoo2003
+
+# Internal packages
+/internal/ @skyoo2003
+
+# Public packages
+/pkg/ @skyoo2003
+/api/ @skyoo2003
+
+# Root library
+/kvs.go @skyoo2003
+
+# Documentation
+/content/ @skyoo2003
+/docs/ @skyoo2003
+
+# CI/CD and GitHub config
+/.github/ @skyoo2003
+
+# Build and release
+/.goreleaser.yml @skyoo2003
+/Makefile @skyoo2003
+/Dockerfile @skyoo2003
+/Dockerfile.goreleaser @skyoo2003
