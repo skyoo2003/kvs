@@ -76,7 +76,7 @@ brews:
     bin.install "kvs"
   skip_upload: false
 
-dockers_v2:
+dockers:
 - images:
   - ghcr.io/skyoo2003/kvs
   dockerfile: Dockerfile.goreleaser
