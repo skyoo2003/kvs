@@ -33,9 +33,6 @@ linters-settings:
     check-shadowing: true
   lll:
     line-length: 120
-  govet:
-    enable:
-      - fieldalignment
   misspell:
     locale: US
 
