@@ -31,8 +31,6 @@ linters-settings:
         disabled: true
   govet:
     check-shadowing: true
-    enable:
-      - fieldalignment
   lll:
     line-length: 120
   misspell:
