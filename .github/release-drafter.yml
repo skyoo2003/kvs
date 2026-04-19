@@ -28,11 +28,9 @@ categories:
       - "github_actions"
 
 version-resolver:
-  major:
-    labels:
-      - "breaking_changes"
   minor:
     labels:
+      - "breaking_changes" # intentionally minor: project is pre-1.0
       - "feature_request"
       - "enhancement"
   patch:
