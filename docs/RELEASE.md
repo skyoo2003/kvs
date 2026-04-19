@@ -26,7 +26,7 @@ Project releases are published from `.github/workflows/release.yaml` when a tag 
 
 ### Publish Flow
 
-1. Push a tag such as `v1.2.3`
+1. Push a tag such as `v0.2.3`
 2. GitHub Actions runs `.github/workflows/release.yaml`
 3. GoReleaser builds the `kvs` binaries and archives defined in `.goreleaser.yml`
 4. The workflow publishes the GitHub release artifacts and related package outputs
