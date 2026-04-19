@@ -26,7 +26,7 @@ jobs:
       uses: goreleaser/goreleaser-action@v7.0.0
       with:
         version: latest
-        args: release --rm-dist --release-notes changes/${{ steps.getTag.outputs.tag }}.md
+        args: release --clean --release-notes changes/${{ steps.getTag.outputs.tag }}.md
       env:
         GITHUB_TOKEN: ${{ secrets.GH_PAT }}
     - name: Upload assets
