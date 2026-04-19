@@ -31,11 +31,10 @@ linters-settings:
         disabled: true
   govet:
     check-shadowing: true
-  lll:
-    line-length: 120
-  govet:
     enable:
       - fieldalignment
+  lll:
+    line-length: 120
   misspell:
     locale: US
 
