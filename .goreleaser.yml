@@ -1,3 +1,5 @@
+version: 2
+
 project_name: kvs
 
 env:
@@ -44,11 +46,9 @@ archives:
     - README.md
     - CHANGELOG.md
     - CODE_OF_CONDUCT.md
-    - CONTRIBUTING.md
-    - SECURITY.md
 
 changelog:
-  skip: true
+  disable: false
 
 checksum:
   algorithm: sha256
@@ -76,22 +76,26 @@ brews:
     bin.install "kvs"
   skip_upload: false
 
-dockers:
-- ids:
-  - kvs
+dockers_v2:
+- images:
+  - ghcr.io/skyoo2003/kvs
   dockerfile: Dockerfile.goreleaser
-  use_buildx: true
-  image_templates:
-  - "ghcr.io/skyoo2003/kvs:{{ .Tag }}-alpine"
-  - "ghcr.io/skyoo2003/kvs:v{{ .Major }}.{{ .Minor }}-alpine"
-  - "ghcr.io/skyoo2003/kvs:v{{ .Major }}-alpine"
-  - "ghcr.io/skyoo2003/kvs:latest-alpine"
-  build_flag_templates:
-  - "--label=org.opencontainers.image.created={{ .Date }}"
-  - "--label=org.opencontainers.image.title={{ .ProjectName }}"
-  - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
-  - "--label=org.opencontainers.image.version={{ .Version }}"
-  skip_push: false
+  ids:
+  - kvs
+  sbom: false
+  flags:
+  - "--provenance=false"
+  tags:
+  - "{{ .Tag }}-alpine"
+  - "v{{ .Major }}.{{ .Minor }}-alpine"
+  - "v{{ .Major }}-alpine"
+  - "latest-alpine"
+  labels:
+    org.opencontainers.image.created: "{{ .Date }}"
+    org.opencontainers.image.source: "https://github.com/skyoo2003/kvs"
+    org.opencontainers.image.title: "{{ .ProjectName }}"
+    org.opencontainers.image.revision: "{{ .FullCommit }}"
+    org.opencontainers.image.version: "{{ .Version }}"
 
 release:
   github:
@@ -99,3 +103,4 @@ release:
     name: kvs
   name_template: "v{{ .Version }}"
   disable: false
+  mode: replace

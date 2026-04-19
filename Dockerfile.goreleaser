@@ -1,9 +1,13 @@
-FROM alpine:3.23
+FROM --platform=$BUILDPLATFORM alpine:3.23
 
+RUN adduser --system --home /kvs appuser
 VOLUME /kvs
 WORKDIR /kvs
-COPY kvs /usr/bin/kvs
+ARG TARGETOS
+ARG TARGETARCH
+COPY ${TARGETOS}/${TARGETARCH}/kvs /usr/bin/kvs
 
 EXPOSE 3456
 
+USER appuser
 ENTRYPOINT ["kvs"]
