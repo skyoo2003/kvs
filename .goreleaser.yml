@@ -58,11 +58,11 @@ brews:
 - ids:
   - kvs
   name: kvs
-  tap:
+  repository:
     owner: skyoo2003
     name: homebrew-tap
     token: "{{ .Env.GITHUB_TOKEN }}"
-  folder: Formula
+  directory: Formula
   url_template: "https://github.com/skyoo2003/kvs/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
   commit_author:
     name: Sung-Kyu Yoo
@@ -76,7 +76,7 @@ brews:
     bin.install "kvs"
   skip_upload: false
 
-dockers:
+dockers_v2:
 - images:
   - ghcr.io/skyoo2003/kvs
   dockerfile: Dockerfile.goreleaser
