@@ -13,7 +13,8 @@ before:
 builds:
 - id: kvs
   binary: kvs
-  main: cmd/kvs/main.go
+  dir: cmd/kvs
+  main: .
   ldflags:
   - -s -w -X main.version={{ .Version }}
   goos:
