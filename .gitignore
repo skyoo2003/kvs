@@ -1,11 +1,28 @@
+# OS
 .DS_Store
+Thumbs.db
+
+# IDE
 *.iml
 *.swp
+.vscode/
+.idea/
 
-/.vscode/
-/.idea/
-/vendor/
-/dist/
-/public/
-/resources/
-/.hugo_build.lock
+# Go
+vendor/
+kvs
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+*.prof
+
+# GoReleaser
+dist/
+
+# Docker
+*.tar.gz
+*.zip
