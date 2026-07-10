@@ -42,7 +42,7 @@ jobs:
       with:
         go-version: ${{ matrix.go-version }}
     - name: Execute golangci-lint
-      uses: golangci/golangci-lint-action@v6.1.1
+      uses: golangci/golangci-lint-action@v9.3.0
       with:
         version: v1.64.8
     - name: Go test
