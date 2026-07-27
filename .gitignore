@@ -10,7 +10,7 @@ Thumbs.db
 
 # Go
 vendor/
-kvs
+/kvs
 *.exe
 *.exe~
 *.dll
@@ -19,10 +19,12 @@ kvs
 *.test
 *.out
 *.prof
+coverage.html
 
 # GoReleaser
 dist/
 
-# Docker
-*.tar.gz
-*.zip
+# Hugo
+/public/
+/resources/
+/.hugo_build.lock
