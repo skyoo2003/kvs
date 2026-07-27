@@ -3,7 +3,7 @@ FROM golang:1.26-alpine AS builder
 ENV CGO_ENABLED=0
 ENV GO111MODULE=on
 
-RUN apk --no-cache --no-progress add git
+RUN apk --no-cache --no-progress add git make
 
 WORKDIR /github.com/skyoo2003/kvs
 COPY . .
