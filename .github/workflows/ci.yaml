@@ -36,7 +36,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
     - name: Checkout the code
-      uses: actions/checkout@v6.0.2
+      uses: actions/checkout@v7.0.0
     - name: Set up Go ${{ matrix.go-version }}
       uses: actions/setup-go@v5
       with:
