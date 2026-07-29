@@ -2,4 +2,4 @@ kind: Fixed
 body: Fix multi-arch (linux/arm64) release images and expose the gRPC port 3457 in container images
 time: 2026-07-30T07:32:49.630294+09:00
 custom:
-    Issue: "0"
+    Issue: "228"
