@@ -1,0 +1,5 @@
+kind: Removed
+body: Drop Homebrew formula releases; the skyoo2003/tap/kvs formula is no longer updated
+time: 2026-07-30T07:32:49.622709+09:00
+custom:
+    Issue: "0"

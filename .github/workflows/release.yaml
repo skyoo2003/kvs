@@ -20,21 +20,32 @@ jobs:
       uses: actions/setup-go@v5
       with:
         go-version-file: go.mod
+    # No QEMU needed: Dockerfile.goreleaser's final stage is COPY-only, so
+    # buildx assembles linux/arm64 natively on this amd64 runner.
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
     - name: Login to Docker Registry
       uses: docker/login-action@v4
       with:
         registry: ghcr.io
-        username: skyoo2003
-        password: ${{ secrets.GH_PAT }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    # GoReleaser reads this file at the very end, after building everything.
+    # Fail in 2s instead of 5min when the changie fragment was never merged.
+    - name: Verify release notes exist
+      run: |
+        if [ ! -f "changes/${{ github.ref_name }}.md" ]; then
+          echo "::error::changes/${{ github.ref_name }}.md not found."
+          echo "::error::Run 'changie batch ${{ github.ref_name }}' and 'changie merge' before pushing the tag."
+          exit 1
+        fi
     - name: Execute GoReleaser
       uses: goreleaser/goreleaser-action@v7.0.0
       with:
         version: "~> v2"
         args: release --clean --release-notes changes/${{ github.ref_name }}.md
       env:
-        GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     - name: Upload assets
       uses: actions/upload-artifact@v7
       with:

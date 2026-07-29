@@ -12,7 +12,6 @@ A key-value store as a distributed server or a Go module.
 - **Cobra/Viper CLI** — `serve` command with configurable listen addresses
 - **Library** — import `github.com/skyoo2003/kvs` directly in Go programs
 - **Docker** — container images published to `ghcr.io/skyoo2003/kvs`
-- **Homebrew** — install via `brew install skyoo2003/tap/kvs`
 
 ## Installation
 
@@ -25,13 +24,7 @@ go install github.com/skyoo2003/kvs/cmd/kvs@latest
 ### Docker
 
 ```sh
-docker run ghcr.io/skyoo2003/kvs:latest-alpine
-```
-
-### Homebrew
-
-```sh
-brew install skyoo2003/tap/kvs
+docker run -p 3456:3456 -p 3457:3457 ghcr.io/skyoo2003/kvs:latest-alpine
 ```
 
 ## Usage

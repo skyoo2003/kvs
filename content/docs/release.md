@@ -19,13 +19,12 @@ changie merge                  # merge into CHANGELOG.md
 2. Commit and push to `main`
 3. Create and push a tag: `git tag v0.x.0 && git push origin v0.x.0`
 4. GitHub Actions runs `.github/workflows/release.yaml`
-5. GoReleaser builds binaries, Docker images, and Homebrew formula
+5. GoReleaser builds binaries and Docker images
 
 ### Artifacts
 
 - **Binaries**: darwin/linux/windows (amd64, arm64) via GitHub Releases
-- **Docker**: `ghcr.io/skyoo2003/kvs:{tag}-alpine`
-- **Homebrew**: `skyoo2003/tap/kvs`
+- **Docker**: `ghcr.io/skyoo2003/kvs:{tag}-alpine` (linux/amd64, linux/arm64)
 
 ## Documentation Site
 

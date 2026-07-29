@@ -1,12 +1,14 @@
 FROM alpine:3.23
 
-RUN adduser --system --home /kvs appuser
-VOLUME /kvs
+# No RUN in this stage on purpose: every layer is a COPY, so buildx assembles
+# linux/arm64 on an amd64 runner with no QEMU. Adding a RUN here brings back
+# the need for binfmt emulation (or native arm64 runners).
 WORKDIR /kvs
 ARG TARGETPLATFORM
 COPY ${TARGETPLATFORM}/kvs /usr/bin/kvs
 
-EXPOSE 3456
+EXPOSE 3456 3457
 
-USER appuser
+USER 65534:65534
 ENTRYPOINT ["kvs"]
+CMD ["serve"]

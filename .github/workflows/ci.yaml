@@ -11,7 +11,7 @@ on:
     - "README.md"
     - ".goreleaser.yml"
     - "Makefile"
-    - ".github/workflows/*.y*ml"
+    - ".github/workflows/**"
     - "**/*.tmpl"
   pull_request:
     branches:
@@ -23,8 +23,15 @@ on:
     - "README.md"
     - ".goreleaser.yml"
     - "Makefile"
-    - ".github/workflows/*.y*ml"
+    - ".github/workflows/**"
     - "**/*.tmpl"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
@@ -32,15 +39,14 @@ jobs:
       fail-fast: false
       matrix:
         os: [ ubuntu-latest ]
-        go-version: [ '1.24' ]
     runs-on: ${{ matrix.os }}
     steps:
     - name: Checkout the code
       uses: actions/checkout@v7.0.0
-    - name: Set up Go ${{ matrix.go-version }}
+    - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: ${{ matrix.go-version }}
+        go-version-file: go.mod
     - name: Execute golangci-lint
       uses: golangci/golangci-lint-action@v6.1.1
       with:
@@ -49,3 +55,10 @@ jobs:
       run: make test
     - name: Go build
       run: make build
+    # Validates .goreleaser.yml schema changes (formats:, dockers_v2.platforms, ...)
+    # which otherwise only fail on a real tag push.
+    - name: Check GoReleaser config
+      uses: goreleaser/goreleaser-action@v7.0.0
+      with:
+        version: "~> v2"
+        args: check
