@@ -108,7 +108,7 @@ func (bs *BitSet) Rshift(n uint) *BitSet {
 
 // String get a string in binary format
 func (bs *BitSet) String() string {
-	return bs.v.Text(2) // nolint:gomnd // This result should be in binary.
+	return bs.v.Text(2) // This result should be in binary.
 }
 
 // Uint get a uint data type
