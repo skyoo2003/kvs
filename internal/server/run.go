@@ -16,12 +16,14 @@ func Run(ctx context.Context, cfg Config, store *kvs.Store) error {
 		store = kvs.NewStore()
 	}
 
-	httpListener, err := net.Listen("tcp", cfg.HTTPAddr)
+	var lc net.ListenConfig
+
+	httpListener, err := lc.Listen(ctx, "tcp", cfg.HTTPAddr)
 	if err != nil {
 		return fmt.Errorf("listen http: %w", err)
 	}
 
-	grpcListener, err := net.Listen("tcp", cfg.GRPCAddr)
+	grpcListener, err := lc.Listen(ctx, "tcp", cfg.GRPCAddr)
 	if err != nil {
 		_ = httpListener.Close()
 		return fmt.Errorf("listen grpc: %w", err)
