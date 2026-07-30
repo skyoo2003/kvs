@@ -44,7 +44,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
     - name: Checkout the code
-      uses: actions/checkout@v7.0.0
+      uses: actions/checkout@v7.0.1
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
