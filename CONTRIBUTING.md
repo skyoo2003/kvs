@@ -6,7 +6,7 @@ Thanks for your interest in contributing!
 
 - Go 1.24+
 - Make
-- golangci-lint (installed automatically by CI, or via [golangci-lint](https://golangci-lint.run/usage/install/))
+- golangci-lint v2 (installed automatically by CI, or via [golangci-lint](https://golangci-lint.run/usage/install/)) — `.golangci.yaml` is v2-only, so a v1 binary will refuse to load it
 
 ## Project Structure
 

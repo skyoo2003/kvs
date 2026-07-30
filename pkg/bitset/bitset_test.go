@@ -194,7 +194,7 @@ func BenchmarkTest(b *testing.B) {
 
 func BenchmarkFlip(b *testing.B) {
 	b.StopTimer()
-	r := rand.New(rand.NewSource(7777)) // nolint
+	r := rand.New(rand.NewSource(7777)) //nolint:gosec // this is not used in a secure application
 	bs := New()
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
@@ -205,7 +205,7 @@ func BenchmarkFlip(b *testing.B) {
 
 func BenchmarkAll(b *testing.B) {
 	b.StopTimer()
-	r := rand.New(rand.NewSource(7777)) // nolint
+	r := rand.New(rand.NewSource(7777)) //nolint:gosec // this is not used in a secure application
 	bs := New()
 	for i := 0; i < b.N; i++ {
 		b := uint(r.Uint32() % uint32(math.MaxInt32))
@@ -219,7 +219,7 @@ func BenchmarkAll(b *testing.B) {
 
 func BenchmarkAny(b *testing.B) {
 	b.StopTimer()
-	r := rand.New(rand.NewSource(7777)) // nolint
+	r := rand.New(rand.NewSource(7777)) //nolint:gosec // this is not used in a secure application
 	bs := New()
 	for i := 0; i < b.N; i++ {
 		b := uint(r.Uint32() % uint32(math.MaxInt32))
@@ -233,7 +233,7 @@ func BenchmarkAny(b *testing.B) {
 
 func BenchmarkCount(b *testing.B) {
 	b.StopTimer()
-	r := rand.New(rand.NewSource(7777)) // nolint
+	r := rand.New(rand.NewSource(7777)) //nolint:gosec // this is not used in a secure application
 	bs := New()
 	for i := 0; i < b.N; i++ {
 		b := uint(r.Uint32() % uint32(math.MaxInt32))
@@ -247,7 +247,7 @@ func BenchmarkCount(b *testing.B) {
 
 func BenchmarkSize(b *testing.B) {
 	b.StopTimer()
-	r := rand.New(rand.NewSource(7777)) // nolint
+	r := rand.New(rand.NewSource(7777)) //nolint:gosec // this is not used in a secure application
 	bs := New()
 	for i := 0; i < b.N; i++ {
 		b := uint(r.Uint32() % uint32(math.MaxInt32))
@@ -261,7 +261,7 @@ func BenchmarkSize(b *testing.B) {
 
 func BenchmarkAnd(b *testing.B) {
 	b.StopTimer()
-	r := rand.New(rand.NewSource(7777)) // nolint
+	r := rand.New(rand.NewSource(7777)) //nolint:gosec // this is not used in a secure application
 	bs1, bs2 := New(), New()
 	for i := 0; i < b.N; i++ {
 		b1 := uint(r.Uint32() % uint32(math.MaxInt32))
@@ -277,7 +277,7 @@ func BenchmarkAnd(b *testing.B) {
 
 func BenchmarkOr(b *testing.B) {
 	b.StopTimer()
-	r := rand.New(rand.NewSource(7777)) // nolint
+	r := rand.New(rand.NewSource(7777)) //nolint:gosec // this is not used in a secure application
 	bs1, bs2 := New(), New()
 	for i := 0; i < b.N; i++ {
 		b1 := uint(r.Uint32() % uint32(math.MaxInt32))
@@ -293,7 +293,7 @@ func BenchmarkOr(b *testing.B) {
 
 func BenchmarkXor(b *testing.B) {
 	b.StopTimer()
-	r := rand.New(rand.NewSource(7777)) // nolint
+	r := rand.New(rand.NewSource(7777)) //nolint:gosec // this is not used in a secure application
 	bs1, bs2 := New(), New()
 	for i := 0; i < b.N; i++ {
 		b1 := uint(r.Uint32() % uint32(math.MaxInt32))
@@ -309,7 +309,7 @@ func BenchmarkXor(b *testing.B) {
 
 func BenchmarkNot(b *testing.B) {
 	b.StopTimer()
-	r := rand.New(rand.NewSource(7777)) // nolint
+	r := rand.New(rand.NewSource(7777)) //nolint:gosec // this is not used in a secure application
 	bs := New()
 	for i := 0; i < b.N; i++ {
 		b := uint(r.Uint32() % uint32(math.MaxInt32))
@@ -323,7 +323,7 @@ func BenchmarkNot(b *testing.B) {
 
 func BenchmarkLshift(b *testing.B) {
 	b.StopTimer()
-	r := rand.New(rand.NewSource(7777)) // nolint
+	r := rand.New(rand.NewSource(7777)) //nolint:gosec // this is not used in a secure application
 	bs := New()
 	for i := 0; i < b.N; i++ {
 		b := uint(r.Uint32() % uint32(math.MaxInt32))
@@ -337,7 +337,7 @@ func BenchmarkLshift(b *testing.B) {
 
 func BenchmarkRshift(b *testing.B) {
 	b.StopTimer()
-	r := rand.New(rand.NewSource(7777)) // nolint
+	r := rand.New(rand.NewSource(7777)) //nolint:gosec // this is not used in a secure application
 	bs := New()
 	for i := 0; i < b.N; i++ {
 		b := uint(r.Uint32() % uint32(math.MaxInt32))

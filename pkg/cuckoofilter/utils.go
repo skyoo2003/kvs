@@ -31,7 +31,7 @@ func getBytesByFingerprint(fp fingerprint) []byte {
 
 func randIndices(idx1, idx2 int) int {
 	rngMu.Lock()
-	v := rng.Intn(maxIndices) //nolint:gosec // this is not used in a secure application
+	v := rng.Intn(maxIndices)
 	rngMu.Unlock()
 	if v == 0 {
 		return idx1

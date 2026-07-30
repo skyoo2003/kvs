@@ -1,43 +1,11 @@
-# https://golangci-lint.run/usage/configuration/
-linters-settings:
-  funlen:
-    lines: 100
-    statements: 50
-  gci:
-    local-prefixes: github.com/skyoo2003/kvs
-  goconst:
-    min-len: 2
-    min-occurrences: 2
-  gocritic:
-    enabled-tags:
-      - diagnostic
-      - experimental
-      - opinionated
-      - performance
-      - style
-    disabled-checks:
-      - dupImport # https://github.com/go-critic/go-critic/issues/845
-      - ifElseChain
-      - octalLiteral
-      - whyNoLint
-      - wrapperFunc
-  gocyclo:
-    min-complexity: 15
-  goimports:
-    local-prefixes: github.com/skyoo2003/kvs
-  revive:
-    rules:
-      - name: exported
-        disabled: true
-  govet:
-    check-shadowing: true
-  lll:
-    line-length: 120
-  misspell:
-    locale: US
-
+version: "2"
+run:
+  # v2 disables the timeout by default; keep the v1 bound so a pathological run
+  # cannot burn a CI runner until the job-level limit.
+  timeout: 10m
+  tests: true
 linters:
-  disable-all: true
+  default: none
   enable:
     - bodyclose
     - errcheck
@@ -47,31 +15,70 @@ linters:
     - goconst
     - gocritic
     - gocyclo
-    - gofmt
-    - goimports
     - goprintffuncname
-    - revive
     - gosec
-    - gosimple
     - govet
     - ineffassign
     - lll
     - misspell
     - nakedret
     - noctx
+    - nolintlint
+    - revive
     - rowserrcheck
     - staticcheck
-    - stylecheck
-    - typecheck
     - unconvert
     - unparam
     - unused
     - whitespace
-
-issues:
-  exclude-use-default: false
-
-run:
-  timeout: 10m
-  tests: true
-  # modules-download-mode: vendor
+  settings:
+    funlen:
+      lines: 100
+      statements: 50
+    goconst:
+      # Test fixtures repeat short literals on purpose.
+      ignore-tests: true
+      min-len: 2
+      min-occurrences: 2
+    gocritic:
+      disabled-checks:
+        - dupImport
+        - ifElseChain
+        - octalLiteral
+        - whyNoLint
+        - wrapperFunc
+      enabled-tags:
+        - diagnostic
+        - experimental
+        - opinionated
+        - performance
+        - style
+    gocyclo:
+      min-complexity: 15
+    govet:
+      enable:
+        - shadow
+    lll:
+      line-length: 120
+    misspell:
+      locale: US
+    nolintlint:
+      # Keep every directive in the canonical `//nolint:linter // reason` form.
+      require-explanation: true
+      require-specific: true
+    revive:
+      rules:
+        - name: exported
+          disabled: true
+  exclusions:
+    generated: lax
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/skyoo2003/kvs
+  exclusions:
+    generated: lax

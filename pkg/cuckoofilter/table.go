@@ -82,10 +82,8 @@ func (t *Table) Reset() error {
 }
 
 // Swap swap two entries at random and returns an original one.
-// nolint:golint
 func (t *Table) Swap(fp fingerprint) fingerprint {
-	// nolint:gosec
-	idx := rand.Intn(t.bucketSize)
+	idx := rand.Intn(t.bucketSize) //nolint:gosec // this is not used in a secure application
 	ofp := t.buckets[idx]
 	t.buckets[idx] = fp
 	return ofp
