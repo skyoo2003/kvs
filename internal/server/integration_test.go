@@ -24,12 +24,12 @@ func TestRunListenersSharesStoreAcrossHTTPAndGRPC(t *testing.T) {
 		value = "go"
 	)
 
-	httpListener, err := net.Listen("tcp", "127.0.0.1:0")
+	httpListener, err := newTestListener(t)
 	if err != nil {
 		t.Fatalf("net.Listen(http) error = %v", err)
 	}
 
-	grpcListener, err := net.Listen("tcp", "127.0.0.1:0")
+	grpcListener, err := newTestListener(t)
 	if err != nil {
 		_ = httpListener.Close()
 		t.Fatalf("net.Listen(grpc) error = %v", err)
@@ -82,7 +82,7 @@ func TestRunListenersSharesStoreAcrossHTTPAndGRPC(t *testing.T) {
 }
 
 func TestRunClosesHTTPListenerWhenGRPCListenFails(t *testing.T) {
-	httpListener, err := net.Listen("tcp", "127.0.0.1:0")
+	httpListener, err := newTestListener(t)
 	if err != nil {
 		t.Fatalf("net.Listen(http) error = %v", err)
 	}
@@ -92,7 +92,7 @@ func TestRunClosesHTTPListenerWhenGRPCListenFails(t *testing.T) {
 		t.Fatalf("httpListener.Close() error = %v", closeErr)
 	}
 
-	grpcListener, err := net.Listen("tcp", "127.0.0.1:0")
+	grpcListener, err := newTestListener(t)
 	if err != nil {
 		t.Fatalf("net.Listen(grpc) error = %v", err)
 	}
@@ -108,11 +108,25 @@ func TestRunClosesHTTPListenerWhenGRPCListenFails(t *testing.T) {
 		t.Fatalf("Run() error = %v, want grpc listen failure", err)
 	}
 
-	reopenedHTTPListener, err := net.Listen("tcp", httpAddr)
+	reopenedHTTPListener, err := newTestListenerAt(t, httpAddr)
 	if err != nil {
 		t.Fatalf("net.Listen(reopen http) error = %v", err)
 	}
 	_ = reopenedHTTPListener.Close()
+}
+
+func newTestListener(t *testing.T) (net.Listener, error) {
+	t.Helper()
+
+	return newTestListenerAt(t, "127.0.0.1:0")
+}
+
+func newTestListenerAt(t *testing.T, addr string) (net.Listener, error) {
+	t.Helper()
+
+	var lc net.ListenConfig
+
+	return lc.Listen(t.Context(), "tcp", addr)
 }
 
 func putKeyOverHTTP(t *testing.T, url, value string) {

@@ -1,5 +1,8 @@
 version: "2"
 run:
+  # v2 disables the timeout by default; keep the v1 bound so a pathological run
+  # cannot burn a CI runner until the job-level limit.
+  timeout: 10m
   tests: true
 linters:
   default: none
@@ -20,6 +23,7 @@ linters:
     - misspell
     - nakedret
     - noctx
+    - nolintlint
     - revive
     - rowserrcheck
     - staticcheck
@@ -32,6 +36,8 @@ linters:
       lines: 100
       statements: 50
     goconst:
+      # Test fixtures repeat short literals on purpose.
+      ignore-tests: true
       min-len: 2
       min-occurrences: 2
     gocritic:
@@ -56,39 +62,23 @@ linters:
       line-length: 120
     misspell:
       locale: US
+    nolintlint:
+      # Keep every directive in the canonical `//nolint:linter // reason` form.
+      require-explanation: true
+      require-specific: true
     revive:
       rules:
         - name: exported
           disabled: true
   exclusions:
     generated: lax
-    rules:
-      # Test fixtures repeat short literals on purpose, and test requests and
-      # listeners have no context to thread through.
-      - path: _test\.go
-        linters:
-          - goconst
-          - noctx
-    paths:
-      - third_party$
-      - builtin$
-      - examples$
 formatters:
   enable:
     - gofmt
     - goimports
   settings:
-    gci:
-      sections:
-        - standard
-        - default
-        - prefix(github.com/skyoo2003/kvs)
     goimports:
       local-prefixes:
         - github.com/skyoo2003/kvs
   exclusions:
     generated: lax
-    paths:
-      - third_party$
-      - builtin$
-      - examples$

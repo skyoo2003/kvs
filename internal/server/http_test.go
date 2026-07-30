@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -10,9 +11,15 @@ import (
 	"github.com/skyoo2003/kvs"
 )
 
+func newTestRequest(t *testing.T, method, target string, body io.Reader) *http.Request {
+	t.Helper()
+
+	return httptest.NewRequestWithContext(t.Context(), method, target, body)
+}
+
 func TestHTTPHandlerHealth(t *testing.T) {
 	handler := NewHTTPHandler(kvs.NewStore())
-	req := httptest.NewRequest(http.MethodGet, "/healthz", http.NoBody)
+	req := newTestRequest(t, http.MethodGet, "/healthz", http.NoBody)
 	res := httptest.NewRecorder()
 
 	handler.ServeHTTP(res, req)
@@ -30,14 +37,14 @@ func TestHTTPHandlerPutGetDelete(t *testing.T) {
 
 	handler := NewHTTPHandler(kvs.NewStore())
 
-	putReq := httptest.NewRequest(http.MethodPut, "/v1/keys/"+key, strings.NewReader(`{"value":"go"}`))
+	putReq := newTestRequest(t, http.MethodPut, "/v1/keys/"+key, strings.NewReader(`{"value":"go"}`))
 	putRes := httptest.NewRecorder()
 	handler.ServeHTTP(putRes, putReq)
 	if putRes.Code != http.StatusNoContent {
 		t.Fatalf("put status = %d, want %d", putRes.Code, http.StatusNoContent)
 	}
 
-	getReq := httptest.NewRequest(http.MethodGet, "/v1/keys/"+key, http.NoBody)
+	getReq := newTestRequest(t, http.MethodGet, "/v1/keys/"+key, http.NoBody)
 	getRes := httptest.NewRecorder()
 	handler.ServeHTTP(getRes, getReq)
 	if getRes.Code != http.StatusOK {
@@ -52,7 +59,7 @@ func TestHTTPHandlerPutGetDelete(t *testing.T) {
 		t.Fatalf("get response = %+v, want key/value", body)
 	}
 
-	deleteReq := httptest.NewRequest(http.MethodDelete, "/v1/keys/"+key, http.NoBody)
+	deleteReq := newTestRequest(t, http.MethodDelete, "/v1/keys/"+key, http.NoBody)
 	deleteRes := httptest.NewRecorder()
 	handler.ServeHTTP(deleteRes, deleteReq)
 	if deleteRes.Code != http.StatusNoContent {
@@ -62,7 +69,7 @@ func TestHTTPHandlerPutGetDelete(t *testing.T) {
 
 func TestHTTPHandlerMissingKey(t *testing.T) {
 	handler := NewHTTPHandler(kvs.NewStore())
-	req := httptest.NewRequest(http.MethodGet, "/v1/keys/missing", http.NoBody)
+	req := newTestRequest(t, http.MethodGet, "/v1/keys/missing", http.NoBody)
 	res := httptest.NewRecorder()
 
 	handler.ServeHTTP(res, req)
@@ -74,7 +81,7 @@ func TestHTTPHandlerMissingKey(t *testing.T) {
 
 func TestHTTPHandlerDeleteMissingKey(t *testing.T) {
 	handler := NewHTTPHandler(kvs.NewStore())
-	req := httptest.NewRequest(http.MethodDelete, "/v1/keys/missing", http.NoBody)
+	req := newTestRequest(t, http.MethodDelete, "/v1/keys/missing", http.NoBody)
 	res := httptest.NewRecorder()
 
 	handler.ServeHTTP(res, req)
@@ -87,15 +94,15 @@ func TestHTTPHandlerDeleteMissingKey(t *testing.T) {
 func TestHTTPHandlerPutOverwritesValue(t *testing.T) {
 	handler := NewHTTPHandler(kvs.NewStore())
 
-	firstReq := httptest.NewRequest(http.MethodPut, "/v1/keys/language", strings.NewReader(`{"value":"go"}`))
+	firstReq := newTestRequest(t, http.MethodPut, "/v1/keys/language", strings.NewReader(`{"value":"go"}`))
 	firstRes := httptest.NewRecorder()
 	handler.ServeHTTP(firstRes, firstReq)
 
-	secondReq := httptest.NewRequest(http.MethodPut, "/v1/keys/language", strings.NewReader(`{"value":"rust"}`))
+	secondReq := newTestRequest(t, http.MethodPut, "/v1/keys/language", strings.NewReader(`{"value":"rust"}`))
 	secondRes := httptest.NewRecorder()
 	handler.ServeHTTP(secondRes, secondReq)
 
-	getReq := httptest.NewRequest(http.MethodGet, "/v1/keys/language", http.NoBody)
+	getReq := newTestRequest(t, http.MethodGet, "/v1/keys/language", http.NoBody)
 	getRes := httptest.NewRecorder()
 	handler.ServeHTTP(getRes, getReq)
 
@@ -111,11 +118,11 @@ func TestHTTPHandlerPutOverwritesValue(t *testing.T) {
 func TestHTTPHandlerSupportsSlashInKey(t *testing.T) {
 	handler := NewHTTPHandler(kvs.NewStore())
 
-	putReq := httptest.NewRequest(http.MethodPut, "/v1/keys/team/backend", strings.NewReader(`{"value":"go"}`))
+	putReq := newTestRequest(t, http.MethodPut, "/v1/keys/team/backend", strings.NewReader(`{"value":"go"}`))
 	putRes := httptest.NewRecorder()
 	handler.ServeHTTP(putRes, putReq)
 
-	getReq := httptest.NewRequest(http.MethodGet, "/v1/keys/team/backend", http.NoBody)
+	getReq := newTestRequest(t, http.MethodGet, "/v1/keys/team/backend", http.NoBody)
 	getRes := httptest.NewRecorder()
 	handler.ServeHTTP(getRes, getReq)
 
@@ -130,7 +137,7 @@ func TestHTTPHandlerSupportsSlashInKey(t *testing.T) {
 
 func TestHTTPHandlerRejectsInvalidBody(t *testing.T) {
 	handler := NewHTTPHandler(kvs.NewStore())
-	req := httptest.NewRequest(http.MethodPut, "/v1/keys/language", strings.NewReader(`{"value":"go"`))
+	req := newTestRequest(t, http.MethodPut, "/v1/keys/language", strings.NewReader(`{"value":"go"`))
 	res := httptest.NewRecorder()
 
 	handler.ServeHTTP(res, req)
