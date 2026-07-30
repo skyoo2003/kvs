@@ -59,8 +59,16 @@ jobs:
       run: make build
     # Validates .goreleaser.yml schema changes (formats:, dockers_v2.platforms, ...)
     # which otherwise only fail on a real tag push.
-    - name: Check GoReleaser config
+    - name: Set up GoReleaser
       uses: goreleaser/goreleaser-action@v7.2.3
       with:
         version: "~> v2"
-        args: check
+        install-only: true
+    - name: Check GoReleaser config
+      # `brews` publishes the Homebrew formula but is deprecated (GoReleaser
+      # removes it in v3), so `check` always exits non-zero. Tolerate that one
+      # deprecation while still failing on a real schema error.
+      run: |
+        out=$(goreleaser check 2>&1) || true
+        echo "$out"
+        echo "$out" | grep -q "configuration is valid" || exit 1
