@@ -1,0 +1,5 @@
+kind: Fixed
+body: 'Homebrew formula updates again on release: tap publishing was dropped along with GH_PAT and now uses a short-lived GitHub App token'
+time: 2026-07-31T00:12:20.85594+09:00
+custom:
+    Issue: "233"

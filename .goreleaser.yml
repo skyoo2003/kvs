@@ -55,6 +55,24 @@ checksum:
   algorithm: sha256
   name_template: 'CHECKSUMS'
 
+# Publishes Formula/kvs.rb to skyoo2003/homebrew-tap. The token comes from a
+# GitHub App installed only on that repository: the job's own GITHUB_TOKEN
+# cannot write to another repo.
+brews:
+- ids:
+  - kvs
+  repository:
+    owner: skyoo2003
+    name: homebrew-tap
+    token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+  homepage: "https://github.com/skyoo2003/kvs"
+  description: "A key-value store as a distributed server or a Go module"
+  license: "MIT"
+  install: |
+    bin.install "kvs"
+  test: |
+    assert_match version.to_s, shell_output("#{bin}/kvs -v")
+
 dockers_v2:
 - images:
   - ghcr.io/skyoo2003/kvs
