@@ -40,7 +40,7 @@ func TestRunListenersSharesStoreAcrossHTTPAndGRPC(t *testing.T) {
 
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- RunListeners(ctx, httpListener, grpcListener, kvs.NewStore())
+		errCh <- RunListeners(ctx, kvs.NewStore(), Listeners{HTTP: httpListener, GRPC: grpcListener})
 	}()
 
 	t.Cleanup(func() {

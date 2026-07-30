@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/spf13/cobra"
@@ -32,6 +33,7 @@ func newServeCmd() *cobra.Command {
 
 	cmd.Flags().String("http-addr", "", "HTTP listen address")
 	cmd.Flags().String("grpc-addr", "", "gRPC listen address")
+	cmd.Flags().String("resp-addr", "", "Redis/Valkey (RESP) listen address, \"none\" to disable")
 
 	return cmd
 }
@@ -44,6 +46,17 @@ func resolveServeConfig(flags *pflag.FlagSet) server.Config {
 	if value := resolveStringValue(flags, "grpc-addr", "grpc_addr"); value != "" {
 		cfg.GRPCAddr = value
 	}
+	// An empty address already means "keep the default", so "none" is how the RESP
+	// listener is turned off from a flag or a config file.
+	if value := resolveStringValue(flags, "resp-addr", "resp_addr"); value != "" {
+		if strings.EqualFold(value, "none") {
+			value = ""
+		}
+		cfg.RESPAddr = value
+	}
+	// Password only, with no flag of its own: a credential passed as an argument shows up in
+	// the process list. Set resp_password in the config file or KVS_RESP_PASSWORD instead.
+	cfg.RESPPassword = viper.GetString("resp_password")
 
 	return cfg
 }

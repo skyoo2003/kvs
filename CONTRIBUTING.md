@@ -14,13 +14,14 @@ Thanks for your interest in contributing!
 .
 ├── kvs.go              # In-memory Store (Get, Put, Delete)
 ├── cmd/kvs/            # CLI entrypoint (Cobra)
-├── internal/server/    # HTTP and gRPC server implementations
+├── internal/server/    # HTTP, gRPC, and RESP server implementations
 ├── api/kvsv1/          # Generated protobuf/gRPC code
 ├── pkg/
 │   ├── bitset/         # Bitset data structure
 │   ├── cuckoofilter/   # Cuckoo filter implementation
 │   ├── lsm/            # In-memory LSM tree
-│   └── rbt/            # Red-black tree
+│   ├── rbt/            # Red-black tree
+│   └── resp/           # RESP2 wire protocol codec
 ├── content/            # Hugo documentation site
 └── changes/            # Changelog fragments (Changie)
 ```
