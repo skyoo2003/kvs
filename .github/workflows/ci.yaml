@@ -66,9 +66,10 @@ jobs:
         install-only: true
     - name: Check GoReleaser config
       # `brews` publishes the Homebrew formula but is deprecated (GoReleaser
-      # removes it in v3), so `check` always exits non-zero. Tolerate that one
-      # deprecation while still failing on a real schema error.
+      # removes it in v3), so `check` always exits non-zero today.
       run: |
-        out=$(goreleaser check 2>&1) || true
+        out=$(goreleaser check 2>&1) && { echo "$out"; exit 0; }
         echo "$out"
-        echo "$out" | grep -q "configuration is valid" || exit 1
+        # Non-zero: tolerate only when the sole reason is the deprecation. A real
+        # schema error reports a different reason, so the job still fails.
+        echo "$out" | grep -q "uses deprecated properties" || exit 1
