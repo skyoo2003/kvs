@@ -25,13 +25,7 @@ go install github.com/skyoo2003/kvs/cmd/kvs@latest
 ### Docker
 
 ```sh
-docker run ghcr.io/skyoo2003/kvs:latest-alpine
-```
-
-### Homebrew
-
-```sh
-brew install skyoo2003/tap/kvs
+docker run -p 3456:3456 -p 3457:3457 ghcr.io/skyoo2003/kvs:latest-alpine
 ```
 
 ## Quick Start

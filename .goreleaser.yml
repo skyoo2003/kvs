@@ -55,28 +55,6 @@ checksum:
   algorithm: sha256
   name_template: 'CHECKSUMS'
 
-brews:
-- ids:
-  - kvs
-  name: kvs
-  repository:
-    owner: skyoo2003
-    name: homebrew-tap
-    token: "{{ .Env.GITHUB_TOKEN }}"
-  directory: Formula
-  url_template: "https://github.com/skyoo2003/kvs/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
-  commit_author:
-    name: Sung-Kyu Yoo
-    email: skyoo2003@gmail.com
-  homepage: "https://github.com/skyoo2003/kvs"
-  description: "A simple key-value store"
-  license: "MIT"
-  test: |
-    system "#{bin}/kvs -v"
-  install: |
-    bin.install "kvs"
-  skip_upload: false
-
 dockers_v2:
 - images:
   - ghcr.io/skyoo2003/kvs

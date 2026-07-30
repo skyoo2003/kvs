@@ -1,0 +1,5 @@
+kind: Changed
+body: Container images now run 'serve' by default as UID 65534 and no longer declare a volume
+time: 2026-07-30T07:32:49.636506+09:00
+custom:
+    Issue: "228"
