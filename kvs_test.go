@@ -2,6 +2,7 @@ package kvs
 
 import (
 	"errors"
+	"slices"
 	"strconv"
 	"sync"
 	"testing"
@@ -260,6 +261,56 @@ func TestStoreExpiryIndexStaysInStep(t *testing.T) {
 	}
 	if got := store.expiringCount(); got != 0 {
 		t.Fatalf("expiring = %d after the key was deleted, want 0", got)
+	}
+}
+
+// TestStoreSortedKeysCacheFollowsTheKeySet is the check that matters for paged scans: the order
+// has to survive an overwrite, or every page pays for a fresh sort, and it has to be dropped
+// whenever the key set moves, or a page reports a key that is gone.
+func TestStoreSortedKeysCacheFollowsTheKeySet(t *testing.T) {
+	store := NewStore()
+	for _, key := range []string{"c", "a", "b"} {
+		if err := store.Put(key, "v"); err != nil {
+			t.Fatalf("Put(%q) error = %v", key, err)
+		}
+	}
+
+	first := store.sortedKeys()
+	if want := []string{"a", "b", "c"}; !slices.Equal(first, want) {
+		t.Fatalf("SortedKeys() = %v, want %v", first, want)
+	}
+
+	// Overwriting a key leaves the key set alone, so the cached order is reused as it stands.
+	if err := store.Put("b", "other"); err != nil {
+		t.Fatalf("Put() error = %v", err)
+	}
+	if second := store.sortedKeys(); &second[0] != &first[0] {
+		t.Fatal("SortedKeys() sorted again after an overwrite, want the cached order")
+	}
+
+	if err := store.Put("d", "v"); err != nil {
+		t.Fatalf("Put() error = %v", err)
+	}
+	if want := []string{"a", "b", "c", "d"}; !slices.Equal(store.sortedKeys(), want) {
+		t.Fatalf("SortedKeys() after an insert = %v, want %v", store.sortedKeys(), want)
+	}
+
+	if err := store.Delete("a"); err != nil {
+		t.Fatalf("Delete() error = %v", err)
+	}
+	if want := []string{"b", "c", "d"}; !slices.Equal(store.sortedKeys(), want) {
+		t.Fatalf("SortedKeys() after a delete = %v, want %v", store.sortedKeys(), want)
+	}
+
+	if err := store.Write(func(tx *Tx) error {
+		tx.Flush()
+
+		return nil
+	}); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+	if got := store.sortedKeys(); len(got) != 0 {
+		t.Fatalf("SortedKeys() after a flush = %v, want none", got)
 	}
 }
 

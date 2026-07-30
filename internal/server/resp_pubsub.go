@@ -68,32 +68,36 @@ func (b *respBroker) dropConn(conn *respConn) {
 // subscribed both by name and by a matching pattern is counted once per match, as Redis
 // counts it.
 func (b *respBroker) publish(channel, payload string) int {
+	type delivery struct {
+		conn *respConn
+		push respPush
+	}
+
 	b.mu.RLock()
-	targets := make([]*respConn, 0, len(b.channels[channel]))
-	pushes := make([]respPush, 0, len(b.channels[channel]))
+	deliveries := make([]delivery, 0, len(b.channels[channel]))
 
 	for conn := range b.channels[channel] {
-		targets = append(targets, conn)
-		pushes = append(pushes, respPush{channel: channel, payload: payload})
+		deliveries = append(deliveries, delivery{conn, respPush{channel: channel, payload: payload}})
 	}
 	for pattern, conns := range b.patterns {
 		if !respGlobMatch(pattern, channel) {
 			continue
 		}
 		for conn := range conns {
-			targets = append(targets, conn)
-			pushes = append(pushes, respPush{pattern: pattern, channel: channel, payload: payload})
+			deliveries = append(deliveries, delivery{
+				conn, respPush{pattern: pattern, channel: channel, payload: payload},
+			})
 		}
 	}
 	b.mu.RUnlock()
 
 	// Deliver outside the broker lock, and never inline: a queued push cannot block, so a
 	// publisher is not exposed to how fast its subscribers read.
-	for i, conn := range targets {
-		conn.deliver(pushes[i])
+	for _, target := range deliveries {
+		target.conn.deliver(target.push)
 	}
 
-	return len(targets)
+	return len(deliveries)
 }
 
 func (b *respBroker) registry(byPattern bool) map[string]map[*respConn]struct{} {

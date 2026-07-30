@@ -320,3 +320,34 @@ func TestRESPPipelinedBatchIsAnswered(t *testing.T) {
 	client.writeRaw("PING" + respCRLF)
 	client.expect("+PONG" + respCRLF)
 }
+
+// TestRESPCloseReleasesListener checks that shutdown reaches the listener. Close only dropped
+// the open connections, so Accept stayed blocked and the port stayed bound for the rest of the
+// process's life.
+func TestRESPCloseReleasesListener(t *testing.T) {
+	var lc net.ListenConfig
+	listener, err := lc.Listen(t.Context(), "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Listen() error = %v", err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+
+	server := NewRESPServer(kvs.NewStore(), "")
+	serveErr := make(chan error, 1)
+	go func() {
+		serveErr <- server.Serve(listener)
+	}()
+
+	if err := server.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+
+	select {
+	case err := <-serveErr:
+		if err != nil {
+			t.Fatalf("Serve() error = %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Serve() is still blocked in Accept after Close")
+	}
+}

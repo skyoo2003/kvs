@@ -30,7 +30,9 @@ func (c *respConn) cmdSAdd(args [][]byte) error {
 			set[string(member)] = struct{}{}
 			added++
 		}
-		respStoreCollection(tx, string(args[1]), entry, set, len(set))
+		if added > 0 {
+			respStoreCollection(tx, string(args[1]), entry, set, len(set))
+		}
 
 		return nil
 	}); err != nil {
@@ -60,7 +62,9 @@ func (c *respConn) cmdSRem(args [][]byte) error {
 				removed++
 			}
 		}
-		respStoreCollection(tx, string(args[1]), entry, set, len(set))
+		if removed > 0 {
+			respStoreCollection(tx, string(args[1]), entry, set, len(set))
+		}
 
 		return nil
 	}); err != nil {
@@ -149,6 +153,9 @@ func (c *respConn) cmdSPop(args [][]byte) error {
 				break
 			}
 			taken = append(taken, member)
+		}
+		if len(taken) == 0 {
+			return nil
 		}
 		for _, member := range taken {
 			delete(set, member)
@@ -252,7 +259,7 @@ func (c *respConn) cmdSScan(args [][]byte) error {
 			return err
 		}
 
-		page = respScanNames(slices.Collect(maps.Keys(set)), after, resumed, opts,
+		page = respScanNames(slices.Sorted(maps.Keys(set)), after, resumed, opts,
 			func(member string) []string { return []string{member} })
 
 		return nil
@@ -294,6 +301,14 @@ func respCombineSets(name string, sets []map[string]struct{}) []string {
 	return slices.Collect(maps.Keys(result))
 }
 
+// respRepeatLimit bounds how many picks one negative-count SRANDMEMBER may ask for. The reply
+// is built in memory, so an unbounded count is a way to make the server allocate: -1e9 asks for
+// 16GB, and math.MinInt used to negate back to itself and panic the connection's goroutine,
+// which takes the process with it.
+//
+// ponytail: fixed ceiling, make it configurable if a caller legitimately needs more.
+const respRepeatLimit = 1 << 20
+
 // respPickMembers selects count members. A negative count is a request for that many picks
 // with repetition allowed.
 func respPickMembers(members []string, count int) []string {
@@ -305,8 +320,9 @@ func respPickMembers(members []string, count int) []string {
 		return members[:min(count, len(members))]
 	}
 
-	picked := make([]string, 0, -count)
-	for range -count {
+	repeats := min(abs(count), respRepeatLimit)
+	picked := make([]string, 0, repeats)
+	for range repeats {
 		// Which member comes back is arbitrary by design, so an unseeded generator is the
 		// right tool here.
 		picked = append(picked, members[rand.IntN(len(members))]) //nolint:gosec // arbitrary pick, not a security decision

@@ -253,3 +253,41 @@ func TestRESPResetClearsConnectionState(t *testing.T) {
 	client.do(":0"+respCRLF, "EXISTS", "k")
 	client.do("$-1"+respCRLF, "CLIENT", "GETNAME")
 }
+
+// TestRESPWatchIgnoresNoOpCollectionWrite covers the other half of tracking keys precisely: a
+// command that changed nothing must not abort someone else's transaction. Storing the container
+// back unconditionally made "SADD s m" for a member the set already held look like a write.
+func TestRESPWatchIgnoresNoOpCollectionWrite(t *testing.T) {
+	clients := newRESPClients(t, 2)
+	watcher, other := clients[0], clients[1]
+
+	watcher.do(":1"+respCRLF, "SADD", "s", "m")
+	watcher.do("+OK"+respCRLF, "WATCH", "s")
+	watcher.do("+OK"+respCRLF, "MULTI")
+	watcher.do("+QUEUED"+respCRLF, "SET", "out", "1")
+
+	// None of these change anything, so none of them may conflict.
+	other.do(":0"+respCRLF, "SADD", "s", "m")
+	other.do(":0"+respCRLF, "SREM", "s", "absent")
+
+	watcher.do("*1"+respCRLF+"+OK"+respCRLF, "EXEC")
+}
+
+// TestRESPWatchDeduplicatesKeys keeps a client from growing the store's watcher table without
+// bound: every registration is walked under the write lock on each change to that key.
+func TestRESPWatchDeduplicatesKeys(t *testing.T) {
+	store := kvs.NewStore()
+	client := newRESPClient(t, store)
+
+	for range 5 {
+		client.do("+OK"+respCRLF, "WATCH", "k", "k")
+	}
+
+	client.do("+OK"+respCRLF, "MULTI")
+	client.do("+QUEUED"+respCRLF, "SET", "k", "2")
+	client.do("*1"+respCRLF+"+OK"+respCRLF, "EXEC")
+
+	// EXEC released the handles, so nothing is left tracking the key.
+	client.do("+OK"+respCRLF, "WATCH", "k")
+	client.do("+OK"+respCRLF, "UNWATCH")
+}

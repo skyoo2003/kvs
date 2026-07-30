@@ -1,9 +1,12 @@
 package server
 
 import (
+	"fmt"
+	"math"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/skyoo2003/kvs"
 )
@@ -251,6 +254,14 @@ func TestRespGlobMatch(t *testing.T) {
 		{pattern: "", name: "a", want: false},
 		{pattern: "abc", name: "abc", want: true},
 		{pattern: "abc", name: "abcd", want: false},
+		{pattern: "*a", name: "ba", want: true},
+		{pattern: "*a", name: "ab", want: false},
+		{pattern: "a*b*c", name: "axxbyyc", want: true},
+		{pattern: "a*b*c", name: "axxcyyb", want: false},
+		{pattern: "*[a-c]*", name: "zzbzz", want: true},
+		{pattern: "*[a-c]*", name: "zzzzz", want: false},
+		{pattern: "a*", name: "a", want: true},
+		{pattern: "*?", name: "", want: false},
 	}
 
 	for _, tt := range tests {
@@ -385,4 +396,101 @@ func TestRESPScanUnknownCursorEndsIteration(t *testing.T) {
 
 	client.do("+OK"+respCRLF, "SET", "k", "v")
 	client.do("*2"+respCRLF+"$1"+respCRLF+"0"+respCRLF+"*0"+respCRLF, "SCAN", "9999")
+}
+
+// TestRespGlobMatchStaysLinear guards the matcher against exponential backtracking. Recursing
+// at every star made this pattern take about 49 seconds for one 40 byte name, and KEYS runs the
+// pattern against every key while holding the store's read lock.
+func TestRespGlobMatchStaysLinear(t *testing.T) {
+	name := strings.Repeat("a", 40)
+	pattern := strings.Repeat("a*", 12) + "b"
+
+	start := time.Now()
+	if respGlobMatch(pattern, name) {
+		t.Fatalf("respGlobMatch(%q, %q) = true, want false", pattern, name)
+	}
+	if elapsed := time.Since(start); elapsed > time.Second {
+		t.Fatalf("respGlobMatch(%q, 40 bytes) took %v, want a linear-time match", pattern, elapsed)
+	}
+}
+
+// TestRESPRefusesOutOfRangeArguments covers the arguments that used to be taken at face value.
+// Each one either panicked the connection's goroutine, which takes the process down with it, or
+// wrapped around into a value that silently destroyed data.
+func TestRESPRefusesOutOfRangeArguments(t *testing.T) {
+	const maxInt64 = "9223372036854775807"
+	const minInt64 = "-9223372036854775808"
+
+	client := newRESPClient(t, kvs.NewStore())
+
+	client.do("+OK"+respCRLF, "SET", "k", "v")
+
+	// offset+len(value) overflowed, skipped the zero padding, and panicked on the copy.
+	client.do("-"+respErrStringTooLong+respCRLF, "SETRANGE", "k", maxInt64, "x")
+	client.do("-"+respErrStringTooLong+respCRLF, "SETRANGE", "k", "536870911", "xx")
+
+	// These wrapped into the past, so the key was dropped while the reply claimed success.
+	client.do("-ERR invalid expire time in 'expire' command"+respCRLF, "EXPIRE", "k", maxInt64)
+	client.do("-ERR invalid expire time in 'pexpire' command"+respCRLF, "PEXPIRE", "k", maxInt64)
+	client.do("-ERR invalid expire time"+respCRLF, "SET", "k2", "v", "EX", maxInt64)
+	client.do("-ERR invalid expire time in 'setex' command"+respCRLF, "SETEX", "k2", maxInt64, "v")
+	client.do("$1"+respCRLF+"v"+respCRLF, "GET", "k")
+
+	// abs(math.MinInt) stays negative, which made this a slice bound out of range.
+	client.do(":2"+respCRLF, "RPUSH", "l", "v", "v")
+	client.do(":2"+respCRLF, "LREM", "l", minInt64, "v")
+
+	// The connection is still usable, which is the point of all of the above.
+	client.do("+PONG"+respCRLF, "PING")
+}
+
+// TestRespPickMembersClampsRepeats keeps SRANDMEMBER's negative count from asking for a slice
+// the server cannot allocate. math.MinInt has no positive counterpart, so negating it left a
+// negative capacity and panicked.
+func TestRespPickMembersClampsRepeats(t *testing.T) {
+	members := []string{"a", "b"}
+
+	if got := len(respPickMembers(members, math.MinInt)); got != respRepeatLimit {
+		t.Fatalf("respPickMembers(math.MinInt) returned %d members, want %d", got, respRepeatLimit)
+	}
+	if got := len(respPickMembers(members, -3)); got != 3 {
+		t.Fatalf("respPickMembers(-3) returned %d members, want 3", got)
+	}
+}
+
+// TestRESPScanCursorResumesOnAnotherConnection is the case a per-connection cursor table got
+// wrong: client libraries pool connections, so the SCAN that opens a cursor and the one that
+// continues it routinely land on different sockets.
+func TestRESPScanCursorResumesOnAnotherConnection(t *testing.T) {
+	clients := newRESPClients(t, 2)
+	opener, resumer := clients[0], clients[1]
+
+	for i := range 30 {
+		opener.do("+OK"+respCRLF, "SET", fmt.Sprintf("k%02d", i), "v")
+	}
+
+	seen := make(map[string]struct{}, 30)
+	cursor := "0"
+	for range 30 {
+		// Alternate connections to prove the cursor is not tied to either one.
+		client := opener
+		if len(seen)%2 == 1 {
+			client = resumer
+		}
+
+		client.send("SCAN", cursor, "COUNT", "5")
+		client.expect("*2" + respCRLF)
+		cursor = client.readBulk()
+		for _, key := range client.readStringArray() {
+			seen[key] = struct{}{}
+		}
+
+		if cursor == "0" {
+			break
+		}
+	}
+
+	if len(seen) != 30 {
+		t.Fatalf("SCAN across two connections saw %d keys, want 30", len(seen))
+	}
 }

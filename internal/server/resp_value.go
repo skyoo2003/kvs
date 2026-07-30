@@ -131,6 +131,10 @@ func respReadZSet(tx *kvs.ReadTx, key string) (*respZSet, error) {
 // respStoreCollection writes container back under key, deleting the key instead when the
 // container has no elements left. Redis has no empty collections: losing the last element
 // removes the key.
+//
+// A command that changed nothing must not call this: every store marks the key's watchers, so a
+// no-op such as re-adding a member the set already holds would abort an unrelated client's
+// transaction.
 func respStoreCollection(tx *kvs.Tx, key string, entry kvs.Entry, container interface{}, size int) {
 	if size == 0 {
 		tx.Delete(key)

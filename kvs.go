@@ -3,6 +3,7 @@ package kvs
 
 import (
 	"errors"
+	"maps"
 	"slices"
 	"sync"
 	"sync/atomic"
@@ -35,6 +36,12 @@ type Store struct {
 	// candidates rather than walking the whole keyspace.
 	expires  map[string]struct{}
 	watchers map[string]map[*Watch]struct{}
+	// sorted caches the keys in order for SortedKeys. Only a change to the key set clears
+	// it, so overwriting a key that already exists keeps it valid. Readers build it while
+	// holding the read lock, hence a lock of its own; a writer clearing it holds mu
+	// exclusively and so cannot race a build.
+	sortedMu sync.Mutex
+	sorted   []string
 }
 
 // NewStore creates a new Store instance.
@@ -169,6 +176,22 @@ func (tx *ReadTx) Keys() []string {
 	return keys
 }
 
+// SortedKeys returns the keys in lexicographic order. The order is cached until the key set
+// changes, so a caller paging through a large keyspace pays for the sort once rather than once
+// per page. Two consequences follow from the cache, and both suit a paged walk: the slice is
+// shared, so a caller must not modify it, and a key that has expired but not yet been
+// reclaimed is still listed, so a caller that cares must check it with Get.
+func (tx *ReadTx) SortedKeys() []string {
+	tx.store.sortedMu.Lock()
+	defer tx.store.sortedMu.Unlock()
+
+	if tx.store.sorted == nil {
+		tx.store.sorted = slices.Sorted(maps.Keys(tx.store.data))
+	}
+
+	return tx.store.sorted
+}
+
 // Len counts the live keys.
 func (tx *ReadTx) Len() int {
 	count := 0
@@ -212,6 +235,10 @@ func (tx *Tx) Set(key string, entry Entry) {
 		tx.store.data = make(map[string]Entry)
 	}
 
+	if _, existed := tx.store.data[key]; !existed {
+		tx.store.sorted = nil
+	}
+
 	tx.store.data[key] = entry
 	if entry.ExpiresAt.IsZero() {
 		delete(tx.store.expires, key)
@@ -244,6 +271,7 @@ func (tx *Tx) Flush() {
 
 	clear(tx.store.data)
 	clear(tx.store.expires)
+	tx.store.sorted = nil
 	tx.store.signalFlush()
 }
 
@@ -251,6 +279,7 @@ func (tx *Tx) Flush() {
 func (tx *Tx) remove(key string) {
 	delete(tx.store.data, key)
 	delete(tx.store.expires, key)
+	tx.store.sorted = nil
 	tx.store.signalChange(key)
 }
 

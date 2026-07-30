@@ -125,7 +125,9 @@ func (c *respConn) cmdZAdd(args [][]byte) error {
 		}
 
 		added, changed = opts.apply(zset, pairs, scores)
-		respStoreCollection(tx, string(args[1]), entry, zset, zset.len())
+		if added+changed > 0 {
+			respStoreCollection(tx, string(args[1]), entry, zset, zset.len())
+		}
 
 		return nil
 	}); err != nil {
@@ -158,7 +160,9 @@ func (c *respConn) cmdZRem(args [][]byte) error {
 				removed++
 			}
 		}
-		respStoreCollection(tx, string(args[1]), entry, zset, zset.len())
+		if removed > 0 {
+			respStoreCollection(tx, string(args[1]), entry, zset, zset.len())
+		}
 
 		return nil
 	}); err != nil {
@@ -413,7 +417,7 @@ func (c *respConn) cmdZScan(args [][]byte) error {
 			return err
 		}
 
-		page = respScanNames(slices.Collect(maps.Keys(zset.members())), after, resumed, opts,
+		page = respScanNames(slices.Sorted(maps.Keys(zset.members())), after, resumed, opts,
 			func(member string) []string {
 				score, _ := zset.score(member)
 

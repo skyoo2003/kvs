@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/skyoo2003/kvs"
+	"github.com/skyoo2003/kvs/pkg/resp"
 )
 
 const (
@@ -21,6 +22,16 @@ const (
 	respUnitPX   = "PX"
 	respUnitEXAT = "EXAT"
 	respUnitPXAT = "PXAT"
+
+	respErrStringTooLong = "ERR string exceeds maximum allowed size (proto-max-bulk-len)"
+)
+
+// Expiry amounts are bounded so that turning a relative expiry into a time.Duration cannot
+// overflow: a Duration is int64 nanoseconds, which runs out after about 292 years. Without the
+// bound "EXPIRE key 9223372036854775807" wrapped into the past and deleted the key instead.
+const (
+	respMaxExpirySeconds = math.MaxInt64 / int64(time.Second)
+	respMaxExpiryMillis  = math.MaxInt64 / int64(time.Millisecond)
 )
 
 var (
@@ -31,6 +42,9 @@ var (
 	errRESPOverflow   = errors.New("ERR increment or decrement would overflow")
 	errRESPRange      = errors.New("ERR value is out of range, must be positive")
 	errRESPNoSuchKey  = errors.New("ERR no such key")
+	errRESPBadExpiry  = errors.New("ERR invalid expire time")
+
+	errRESPStringTooLong = errors.New(respErrStringTooLong)
 
 	errRESPInvalidCursor  = errors.New("ERR invalid cursor")
 	errRESPHashNotInteger = errors.New("ERR hash value is not an integer")
@@ -78,6 +92,17 @@ func respExpiryAt(unit string, value int64, now time.Time) (time.Time, bool) {
 	default:
 		return time.Time{}, false
 	}
+}
+
+// respExpiryFits reports whether value is a usable amount for unit. A value beyond the range
+// wraps into the past once converted, which would silently drop the key.
+func respExpiryFits(unit string, value int64) bool {
+	limit := respMaxExpirySeconds
+	if unit == respUnitPX || unit == respUnitPXAT {
+		limit = respMaxExpiryMillis
+	}
+
+	return value >= -limit && value <= limit
 }
 
 // respSetOptions holds the parsed trailing options of SET. The expiry is kept as the raw
@@ -133,6 +158,9 @@ func (o *respSetOptions) setExpiry(unit string, rest [][]byte) error {
 	}
 	if amount <= 0 && (unit == respUnitEX || unit == respUnitPX) {
 		return errRESPRange
+	}
+	if !respExpiryFits(unit, amount) {
+		return errRESPBadExpiry
 	}
 
 	o.expiry, o.expiryArg = unit, amount
@@ -252,7 +280,7 @@ func (c *respConn) cmdSetEX(args [][]byte) error {
 	if err != nil {
 		return c.writer.WriteError(respErrNotInteger)
 	}
-	if amount <= 0 {
+	if amount <= 0 || !respExpiryFits(unit, amount) {
 		return c.writer.WriteError("ERR invalid expire time in '" + strings.ToLower(string(args[0])) + "' command")
 	}
 
@@ -476,6 +504,10 @@ func (c *respConn) cmdAppend(args [][]byte) error {
 			current, expiresAt = stored, entry.ExpiresAt
 		}
 
+		if len(current) > resp.MaxBulkLength-len(args[2]) {
+			return errRESPStringTooLong
+		}
+
 		next := current + string(args[2])
 		length = len(next)
 		tx.Set(string(args[1]), kvs.Entry{Value: next, ExpiresAt: expiresAt})
@@ -554,6 +586,11 @@ func (c *respConn) cmdSetRange(args [][]byte) error {
 	}
 	if offset < 0 {
 		return c.writer.WriteError("ERR offset is out of range")
+	}
+	// Written as a subtraction because offset+len(patch) overflows for an offset near MaxInt,
+	// which used to wrap negative, skip the zero padding, and panic on the copy below.
+	if offset > resp.MaxBulkLength-len(args[3]) {
+		return c.writer.WriteError(respErrStringTooLong)
 	}
 
 	var length int

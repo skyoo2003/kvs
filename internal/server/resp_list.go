@@ -1,6 +1,7 @@
 package server
 
 import (
+	"math"
 	"strconv"
 
 	"github.com/skyoo2003/kvs"
@@ -84,7 +85,9 @@ func (c *respConn) cmdPop(args [][]byte) error {
 		} else {
 			popped = list.popBack(count)
 		}
-		respStoreCollection(tx, string(args[1]), entry, list, list.len())
+		if len(popped) > 0 {
+			respStoreCollection(tx, string(args[1]), entry, list, list.len())
+		}
 
 		return nil
 	}); err != nil {
@@ -228,8 +231,8 @@ func (c *respConn) cmdLRem(args [][]byte) error {
 		removed = dropped
 		if dropped > 0 {
 			list.replace(kept)
+			respStoreCollection(tx, string(args[1]), entry, list, list.len())
 		}
-		respStoreCollection(tx, string(args[1]), entry, list, list.len())
 
 		return nil
 	}); err != nil {
@@ -335,10 +338,17 @@ func respParseIndexPair(first, second []byte) (start, end int, err error) {
 	return start, end, nil
 }
 
+// abs is the magnitude of value. It saturates at MaxInt because math.MinInt has no positive
+// counterpart: negating it yields itself, still negative, and a client is free to send it.
+// LREM used that magnitude as a slice bound, so without the clamp "LREM key -9223372036854775808
+// v" panicked the connection's goroutine and took the process with it.
 func abs(value int) int {
-	if value < 0 {
+	switch {
+	case value == math.MinInt:
+		return math.MaxInt
+	case value < 0:
 		return -value
+	default:
+		return value
 	}
-
-	return value
 }

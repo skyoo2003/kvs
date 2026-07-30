@@ -64,63 +64,68 @@ func respGlobMatch(pattern, name string) bool {
 	return globMatch([]byte(pattern), []byte(name))
 }
 
+// globMatch walks pattern and name together, remembering only the most recent star. When a
+// later element fails to match, the walk hands that star one more byte and resumes from there.
+//
+// Recursing at every star instead would be shorter but exponential: "a*a*a*a*a*a*a*a*b"
+// against a run of a's takes minutes, and KEYS runs the pattern against every key while
+// holding the store's read lock. One remembered star is enough, because giving the earliest
+// star the fewest bytes it can take never rules out a match, and it bounds the work at
+// O(len(pattern) * len(name)).
 func globMatch(pattern, name []byte) bool {
-	for len(pattern) > 0 {
-		switch pattern[0] {
-		case '*':
-			return globMatchStar(pattern, name)
-		case '?':
-			if len(name) == 0 {
-				return false
-			}
-			pattern, name = pattern[1:], name[1:]
-		case '[':
-			rest, ok := matchGlobClass(pattern, name)
-			if !ok {
-				return false
-			}
-			pattern, name = rest, name[1:]
-		default:
-			if pattern[0] == '\\' && len(pattern) > 1 {
-				pattern = pattern[1:]
-			}
-			if len(name) == 0 || pattern[0] != name[0] {
-				return false
-			}
-			pattern, name = pattern[1:], name[1:]
+	at, seen := 0, 0
+	starAt, starSeen := -1, 0
+
+	for seen < len(name) {
+		if at < len(pattern) && pattern[at] == '*' {
+			starAt, starSeen = at, seen
+			at++
+
+			continue
 		}
+		if at < len(pattern) {
+			if hit, next := matchGlobOne(pattern, at, name[seen]); hit {
+				at, seen = next, seen+1
+
+				continue
+			}
+		}
+		if starAt < 0 {
+			return false
+		}
+
+		// Let the remembered star swallow one more byte and retry what follows it.
+		starSeen++
+		at, seen = starAt+1, starSeen
 	}
 
-	return len(name) == 0
+	// Trailing stars match the empty remainder of name.
+	for at < len(pattern) && pattern[at] == '*' {
+		at++
+	}
+
+	return at == len(pattern)
 }
 
-// globMatchStar matches a run of stars at the head of pattern against any prefix of name.
-func globMatchStar(pattern, name []byte) bool {
-	for len(pattern) > 1 && pattern[1] == '*' {
-		pattern = pattern[1:]
+// matchGlobOne matches one pattern element, which is an escape, a character class, a ? or a
+// literal byte, against ch and reports the index just past that element.
+func matchGlobOne(pattern []byte, at int, ch byte) (hit bool, next int) {
+	switch {
+	case pattern[at] == '?':
+		return true, at + 1
+	case pattern[at] == '[':
+		return matchGlobClass(pattern, at, ch)
+	case pattern[at] == '\\' && at+1 < len(pattern):
+		return pattern[at+1] == ch, at + 2
+	default:
+		return pattern[at] == ch, at + 1
 	}
-	if len(pattern) == 1 {
-		return true
-	}
-
-	// Try every split point; what follows the star has to match some suffix of name.
-	for i := 0; i <= len(name); i++ {
-		if globMatch(pattern[1:], name[i:]) {
-			return true
-		}
-	}
-
-	return false
 }
 
-// matchGlobClass matches the first byte of name against the character class at the head of
-// pattern, returning what is left of the pattern after the class.
-func matchGlobClass(pattern, name []byte) (rest []byte, ok bool) {
-	if len(name) == 0 {
-		return nil, false
-	}
-
-	i := 1
+// matchGlobClass matches ch against the character class starting at pattern[at], returning the
+// index just past the class.
+func matchGlobClass(pattern []byte, at int, ch byte) (hit bool, next int) {
+	i := at + 1
 	negate := false
 	if i < len(pattern) && pattern[i] == '^' {
 		negate, i = true, i+1
@@ -128,9 +133,9 @@ func matchGlobClass(pattern, name []byte) (rest []byte, ok bool) {
 
 	matched := false
 	for i < len(pattern) && pattern[i] != ']' {
-		var hit bool
-		hit, i = matchGlobClassItem(pattern, i, name[0])
-		matched = matched || hit
+		var found bool
+		found, i = matchGlobClassItem(pattern, i, ch)
+		matched = matched || found
 	}
 
 	// Skip the closing bracket. An unterminated class simply ends the pattern.
@@ -138,7 +143,7 @@ func matchGlobClass(pattern, name []byte) (rest []byte, ok bool) {
 		i++
 	}
 
-	return pattern[i:], matched != negate
+	return matched != negate, i
 }
 
 // matchGlobClassItem matches one item inside a character class, which is an escape, a

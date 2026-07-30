@@ -17,7 +17,7 @@ import (
 func newServeCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:           "serve",
-		Short:         "Run the HTTP and gRPC servers",
+		Short:         "Run the HTTP, gRPC, and RESP servers",
 		Args:          cobra.NoArgs,
 		SilenceErrors: true,
 		SilenceUsage:  true,

@@ -4,6 +4,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/skyoo2003/kvs"
@@ -17,10 +18,71 @@ const (
 	// matching the Redis default.
 	respScanBatch = 10
 
-	// respScanCursorLimit bounds how many unfinished iterations one connection may leave
-	// behind, since an abandoned cursor is otherwise remembered until it disconnects.
-	respScanCursorLimit = 64
+	// respScanCursorLimit bounds how many unfinished iterations the server remembers, since an
+	// abandoned cursor is otherwise never forgotten. One walk holds one entry.
+	respScanCursorLimit = 1024
 )
+
+// respCursors remembers, per open cursor, the last name a scan reached.
+//
+// It belongs to the server rather than to the connection because client libraries pool
+// connections: the SCAN that opens a cursor and the SCAN that continues it routinely land on
+// different sockets, and per-connection state made the second one report an empty final page.
+// A cursor is only a resume point, so it is harmless for any connection to present it.
+type respCursors struct {
+	mu   sync.Mutex
+	at   map[uint64]string
+	last uint64
+}
+
+// resume reports where a cursor left off. Cursor zero starts a fresh iteration.
+func (r *respCursors) resume(cursor uint64) (after string, resumed, known bool) {
+	if cursor == 0 {
+		return "", false, true
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	after, known = r.at[cursor]
+
+	return after, known, known
+}
+
+// remember stores where a page stopped, reusing the handle when an iteration is already under
+// way so a client sees one stable cursor per walk.
+func (r *respCursors) remember(cursor uint64, resumeAfter string) uint64 {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.at == nil {
+		r.at = make(map[uint64]string)
+	}
+
+	if cursor == 0 {
+		// Abandoned iterations are never finished, so cap how many may pile up.
+		for id := range r.at {
+			if len(r.at) < respScanCursorLimit {
+				break
+			}
+			delete(r.at, id)
+		}
+
+		r.last++
+		cursor = r.last
+	}
+
+	r.at[cursor] = resumeAfter
+
+	return cursor
+}
+
+func (r *respCursors) forget(cursor uint64) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	delete(r.at, cursor)
+}
 
 // respExpireUnits maps each command of the EXPIRE family to the expiry unit it takes.
 var respExpireUnits = map[string]string{
@@ -134,6 +196,9 @@ func (c *respConn) cmdExpire(args [][]byte) error {
 	amount, err := strconv.ParseInt(string(args[2]), 10, 64)
 	if err != nil {
 		return c.writer.WriteError(respErrNotInteger)
+	}
+	if !respExpiryFits(unit, amount) {
+		return c.writer.WriteError("ERR invalid expire time in '" + strings.ToLower(string(args[0])) + "' command")
 	}
 
 	var applied bool
@@ -325,10 +390,8 @@ func (c *respConn) cmdRandomKey(_ [][]byte) error {
 
 	if err := c.read(func(tx *kvs.ReadTx) error {
 		// Go randomizes map iteration order, so the first key is already an arbitrary one.
-		for _, candidate := range tx.Keys() {
-			key, found = candidate, true
-
-			break
+		if keys := tx.Keys(); len(keys) > 0 {
+			key, found = keys[0], true
 		}
 
 		return nil
@@ -368,7 +431,9 @@ func (c *respConn) cmdScan(args [][]byte) error {
 
 	var page respScanPage
 	if err := c.read(func(tx *kvs.ReadTx) error {
-		page = respScanNames(tx.Keys(), after, resumed, opts, func(key string) []string {
+		page = respScanNames(tx.SortedKeys(), after, resumed, opts, func(key string) []string {
+			// SortedKeys still lists a key that has expired without being reclaimed yet, so
+			// the reply drops it here.
 			entry, ok := tx.Get(key)
 			if !ok {
 				return nil
@@ -397,18 +462,22 @@ type respScanPage struct {
 	done        bool
 }
 
-// respScanNames walks names in sorted order, starting after the one the previous call reached,
-// and inspects at most COUNT of them. emit turns one matching name into the values the reply
-// carries, and returns nothing for a name that fails a filter of its own.
+// respScanNames walks names, which the caller must supply in sorted order, starting after the
+// one the previous call reached, and inspects at most COUNT of them. emit turns one matching
+// name into the values the reply carries, and returns nothing for a name that fails a filter of
+// its own.
 //
 // COUNT bounds names examined rather than values returned, which is what Redis documents.
-// Sorting is what makes the cursor resumable: the order is the same on every call, so
-// continuing past a name cannot skip or repeat one.
+// The order is what makes the cursor resumable: it is the same on every call, so continuing
+// past a name cannot skip or repeat one.
+//
+// SCAN takes its order from the store, which caches it, so walking a large keyspace sorts once
+// rather than once per page. A collection walk sorts its own members instead.
+// ponytail: per-page sort for HSCAN, SSCAN, and ZSCAN, worth a maintained order only if one
+// hash, set, or sorted set ever grows large enough to matter.
 func respScanNames(names []string, after string, resumed bool, opts respScanOptions,
 	emit func(name string) []string,
 ) respScanPage {
-	slices.Sort(names)
-
 	start := 0
 	if resumed {
 		start, _ = slices.BinarySearch(names, after)
@@ -432,23 +501,16 @@ func respScanNames(names []string, after string, resumed bool, opts respScanOpti
 	return page
 }
 
-// scanResume reports where a cursor left off. Cursor zero starts a fresh iteration.
 func (c *respConn) scanResume(cursor uint64) (after string, resumed, known bool) {
-	if cursor == 0 {
-		return "", false, true
-	}
-
-	after, known = c.scanAfter[cursor]
-
-	return after, known, known
+	return c.server.cursors.resume(cursor)
 }
 
 func (c *respConn) writeScanPage(cursor uint64, page respScanPage) error {
 	next := "0"
 	if page.done {
-		delete(c.scanAfter, cursor)
+		c.server.cursors.forget(cursor)
 	} else {
-		next = strconv.FormatUint(c.scanRemember(cursor, page.resumeAfter), 10)
+		next = strconv.FormatUint(c.server.cursors.remember(cursor, page.resumeAfter), 10)
 	}
 
 	if err := c.writer.WriteArrayHeader(2); err != nil {
@@ -459,32 +521,6 @@ func (c *respConn) writeScanPage(cursor uint64, page respScanPage) error {
 	}
 
 	return c.writer.WriteStrings(page.items)
-}
-
-// scanRemember stores where this page stopped, reusing the handle when an iteration is already
-// under way so a client sees one stable cursor per walk.
-func (c *respConn) scanRemember(cursor uint64, resumeAfter string) uint64 {
-	if c.scanAfter == nil {
-		c.scanAfter = make(map[uint64]string)
-	}
-
-	if cursor == 0 {
-		// Abandoned iterations are only forgotten when the connection closes, so cap how many
-		// one connection may leave behind.
-		for id := range c.scanAfter {
-			if len(c.scanAfter) < respScanCursorLimit {
-				break
-			}
-			delete(c.scanAfter, id)
-		}
-
-		c.scanCursor++
-		cursor = c.scanCursor
-	}
-
-	c.scanAfter[cursor] = resumeAfter
-
-	return cursor
 }
 
 func (c *respConn) cmdDBSize(_ [][]byte) error {

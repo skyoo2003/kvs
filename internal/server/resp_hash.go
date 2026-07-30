@@ -145,7 +145,9 @@ func (c *respConn) cmdHDel(args [][]byte) error {
 				removed++
 			}
 		}
-		respStoreCollection(tx, string(args[1]), entry, hash, len(hash))
+		if removed > 0 {
+			respStoreCollection(tx, string(args[1]), entry, hash, len(hash))
+		}
 
 		return nil
 	}); err != nil {
@@ -308,7 +310,7 @@ func (c *respConn) cmdHScan(args [][]byte) error {
 			return err
 		}
 
-		page = respScanNames(slices.Collect(maps.Keys(hash)), after, resumed, opts,
+		page = respScanNames(slices.Sorted(maps.Keys(hash)), after, resumed, opts,
 			func(field string) []string { return []string{field, hash[field]} })
 
 		return nil

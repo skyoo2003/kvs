@@ -59,11 +59,13 @@ type RESPServer struct {
 	store    *kvs.Store
 	password string
 	broker   *respBroker
+	cursors  respCursors
 	lastID   atomic.Int64
 
-	mu     sync.Mutex
-	conns  map[*respConn]struct{}
-	closed bool
+	mu       sync.Mutex
+	conns    map[*respConn]struct{}
+	listener net.Listener
+	closed   bool
 }
 
 // NewRESPServer creates a server backed by store, or by a fresh store when store is nil. An
@@ -84,6 +86,12 @@ func NewRESPServer(store *kvs.Store, password string) *RESPServer {
 // Serve accepts clients until listener is closed or Close is called. A graceful close
 // reports no error.
 func (s *RESPServer) Serve(listener net.Listener) error {
+	// Close has to reach the listener, or Accept below stays blocked after shutdown and keeps
+	// the port bound for the rest of the process's life.
+	if !s.trackListener(listener) {
+		return nil
+	}
+
 	for {
 		netConn, err := listener.Accept()
 		if err != nil {
@@ -116,13 +124,32 @@ func (s *RESPServer) Close() error {
 	s.closed = true
 	conns := slices.Collect(maps.Keys(s.conns))
 	clear(s.conns)
+	listener := s.listener
+	s.listener = nil
 	s.mu.Unlock()
 
+	if listener != nil {
+		_ = listener.Close()
+	}
 	for _, conn := range conns {
 		_ = conn.netConn.Close()
 	}
 
 	return nil
+}
+
+// trackListener hands the listener to Close, reporting false when the server is already closed
+// and the caller should not start accepting.
+func (s *RESPServer) trackListener(listener net.Listener) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.closed {
+		return false
+	}
+	s.listener = listener
+
+	return true
 }
 
 func (s *RESPServer) newConn(netConn net.Conn) *respConn {
@@ -224,13 +251,15 @@ type respConn struct {
 	queueError bool
 	watches    []*kvs.Watch
 
+	// watched is the set of keys this connection already holds a handle for, so that a client
+	// repeating WATCH does not register the same key twice. Without it a loop of WATCH calls
+	// grows the store's watcher table without bound and makes every write to that key walk
+	// every registration under the store's write lock.
+	watched map[string]struct{}
+
 	// Subscriptions held by this connection.
 	channels map[string]struct{}
 	patterns map[string]struct{}
-
-	// scanAfter remembers, per open cursor, the last key a SCAN call reached.
-	scanAfter  map[uint64]string
-	scanCursor uint64
 }
 
 // read runs fn against the store under a read lock, or inside the ambient transaction when
@@ -403,6 +432,11 @@ func (c *respConn) reportReadError(err error) {
 	if !errors.Is(err, resp.ErrProtocol) {
 		return
 	}
+
+	// The writer is shared with the goroutine pumping pushed messages, so claim it the same
+	// way every other reply does.
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
 
 	_ = c.writer.WriteError("ERR Protocol error: " + err.Error())
 	_ = c.writer.Flush()

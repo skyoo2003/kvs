@@ -74,7 +74,8 @@ const (
 //
 // It cannot be an initialized variable: EXEC runs its queued commands back through this
 // same table, so the initializer would depend on itself and Go rejects that as an
-// initialization cycle. A declaration without an initializer sidesteps it.
+// initialization cycle. An init function would sidestep it, but the linter forbids one, so
+// the table is filled lazily instead.
 var (
 	respCommandsOnce sync.Once
 	respCommands     map[string]respCommand

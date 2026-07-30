@@ -10,7 +10,7 @@ KVS is a key-value store written in Go. It provides an in-memory store that can 
 - **In-memory key-value store** — thread-safe `Store` with `Get`, `Put`, `Delete`
 - **HTTP server** — JSON REST API at `/v1/keys/{key}` with health check at `/healthz`
 - **gRPC server** — protobuf-based KV service with gRPC health checking
-- **Redis/Valkey API** — RESP2 server on `:6379`, so `redis-cli` and `go-redis` connect directly
+- **Redis/Valkey API** — RESP2 server on `127.0.0.1:6379`, so `redis-cli` and `go-redis` connect directly
 - **Cobra/Viper CLI** — `serve` command with configurable listen addresses
 - **Library** — import `github.com/skyoo2003/kvs` directly in Go programs
 - **Docker** — container images published to `ghcr.io/skyoo2003/kvs`

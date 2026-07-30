@@ -33,8 +33,8 @@ var respTransactionCommands = map[string]bool{
 	respCmdDiscard: true,
 	respCmdExec:    true,
 	respCmdMulti:   true,
-	"QUIT":         true,
-	"RESET":        true,
+	respCmdQuit:    true,
+	respCmdReset:   true,
 	respCmdWatch:   true,
 }
 
@@ -72,7 +72,8 @@ func (c *respConn) cmdExec(_ [][]byte) error {
 	}
 
 	queued, aborted, watches := c.queued, c.queueError, c.watches
-	c.inMulti, c.queued, c.queueError, c.watches = false, nil, false, nil
+	c.inMulti, c.queued, c.queueError = false, nil, false
+	c.watches, c.watched = nil, nil
 
 	// Closing happens after Write returns, because Close takes the store lock itself.
 	defer func() {
@@ -134,10 +135,20 @@ func (c *respConn) cmdWatch(args [][]byte) error {
 	}
 
 	keys := make([]string, 0, len(args)-1)
-	for _, key := range args[1:] {
-		keys = append(keys, string(key))
+	for _, raw := range args[1:] {
+		key := string(raw)
+		if _, seen := c.watched[key]; seen {
+			continue
+		}
+		if c.watched == nil {
+			c.watched = make(map[string]struct{})
+		}
+		c.watched[key] = struct{}{}
+		keys = append(keys, key)
 	}
-	c.watches = append(c.watches, c.server.store.Watch(keys...))
+	if len(keys) > 0 {
+		c.watches = append(c.watches, c.server.store.Watch(keys...))
+	}
 
 	return c.writer.WriteSimple(respOK)
 }
@@ -173,7 +184,7 @@ func (c *respConn) clearWatches() {
 		watch.Close()
 	}
 
-	c.watches = nil
+	c.watches, c.watched = nil, nil
 }
 
 // cmdAuth checks a client credential. Redis accepts both the bare password form and the
