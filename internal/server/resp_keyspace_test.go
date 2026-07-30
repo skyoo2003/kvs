@@ -121,6 +121,14 @@ func TestRESPExpiryCommands(t *testing.T) {
 	// GETEX with no option leaves the expiry alone.
 	client.do("$1"+respCRLF+"v"+respCRLF, "GETEX", "g")
 	client.do(":60"+respCRLF, "TTL", "g")
+
+	// GETEX shares its option parser with SET, so the flags only SET takes have to be
+	// refused rather than accepted and quietly dropped.
+	client.do("-"+respErrSyntax+respCRLF, "GETEX", "g", "EX", "10", "NX")
+	client.do("-"+respErrSyntax+respCRLF, "GETEX", "g", "KEEPTTL")
+	// An unusable expiry names the command the client sent, not the parser it shares.
+	client.do("-ERR invalid expire time in 'getex' command"+respCRLF, "GETEX", "g", "EX", "0")
+	client.do(":60"+respCRLF, "TTL", "g")
 }
 
 func TestRESPKeyspaceCommands(t *testing.T) {
@@ -221,9 +229,76 @@ func TestRESPInfoReportsKeyspace(t *testing.T) {
 	client := newRESPClient(t, kvs.NewStore())
 
 	client.do("+OK"+respCRLF, "SET", "k", "v")
+	client.do("+OK"+respCRLF, "SET", "ttl", "v", "EX", "100")
 	client.send("INFO")
-	if info := client.readBulk(); !strings.Contains(info, "db0:keys=1,expires=0,avg_ttl=0") {
+	// expires counts the keys carrying a TTL, which the line used to report as zero always.
+	if info := client.readBulk(); !strings.Contains(info, "db0:keys=2,expires=1,avg_ttl=0") {
 		t.Fatalf("INFO = %q, want the keyspace section", info)
+	}
+}
+
+// TestRESPRandomKeySkipsExpiredKeys covers the sampling. RANDOMKEY draws from the cached key
+// order, which still lists keys that expired without being reclaimed, so a draw landing on one
+// has to keep looking rather than report it.
+func TestRESPRandomKeySkipsExpiredKeys(t *testing.T) {
+	client := newRESPClient(t, kvs.NewStore())
+
+	client.do("+OK"+respCRLF, "SET", "live", "v")
+	for i := range 3 {
+		client.do("+OK"+respCRLF, "SET", "gone:"+itoa(i), "v", "PX", "1")
+	}
+	// Nothing writes past this point, so the expired keys stay unreclaimed for the draw.
+	time.Sleep(20 * time.Millisecond)
+
+	for range 20 {
+		client.send("RANDOMKEY")
+		if got := client.readBulk(); got != "live" {
+			t.Fatalf("RANDOMKEY = %q, want the only live key", got)
+		}
+	}
+}
+
+// TestRESPScanCursorsAreNotGuessable covers the cursor table being server-wide. Handing out
+// counted-up ids meant a client presenting a small number of its own landed on someone else's
+// walk and moved its resume point, which made that walk skip keys.
+func TestRESPScanCursorsAreNotGuessable(t *testing.T) {
+	client := newRESPClient(t, kvs.NewStore())
+
+	const keyCount = 40
+	for i := range keyCount {
+		client.do("+OK"+respCRLF, "SET", "k:"+itoa(i), "v")
+	}
+
+	client.send("SCAN", "0", "COUNT", "5")
+	client.expect("*2" + respCRLF)
+	cursor := client.readBulk()
+	seen := len(client.readStringArray())
+	if cursor == "0" {
+		t.Fatal("SCAN finished in one page, want an open cursor to interfere with")
+	}
+
+	// Every id a client would plausibly invent has to be unknown, so that presenting one ends
+	// that client's own iteration instead of moving the walk above.
+	for id := 1; id <= 64; id++ {
+		client.send("SCAN", itoa(id), "COUNT", "5")
+		client.expect("*2" + respCRLF)
+		if got := client.readBulk(); got != "0" {
+			t.Fatalf("SCAN %d cursor = %q, want an unknown cursor to end the iteration", id, got)
+		}
+		if got := client.readStringArray(); len(got) != 0 {
+			t.Fatalf("SCAN %d = %v, want no keys", id, got)
+		}
+	}
+
+	// The original walk still reaches every key.
+	for cursor != "0" {
+		client.send("SCAN", cursor, "COUNT", "5")
+		client.expect("*2" + respCRLF)
+		cursor = client.readBulk()
+		seen += len(client.readStringArray())
+	}
+	if seen != keyCount {
+		t.Fatalf("SCAN saw %d keys, want %d", seen, keyCount)
 	}
 }
 
@@ -432,7 +507,7 @@ func TestRESPRefusesOutOfRangeArguments(t *testing.T) {
 	// These wrapped into the past, so the key was dropped while the reply claimed success.
 	client.do("-ERR invalid expire time in 'expire' command"+respCRLF, "EXPIRE", "k", maxInt64)
 	client.do("-ERR invalid expire time in 'pexpire' command"+respCRLF, "PEXPIRE", "k", maxInt64)
-	client.do("-ERR invalid expire time"+respCRLF, "SET", "k2", "v", "EX", maxInt64)
+	client.do("-ERR invalid expire time in 'set' command"+respCRLF, "SET", "k2", "v", "EX", maxInt64)
 	client.do("-ERR invalid expire time in 'setex' command"+respCRLF, "SETEX", "k2", maxInt64, "v")
 	client.do("$1"+respCRLF+"v"+respCRLF, "GET", "k")
 

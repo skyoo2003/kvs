@@ -400,36 +400,18 @@ func (c *respConn) cmdZRank(args [][]byte) error {
 // resume in an order that does not move when a score changes. The SCAN family promises no
 // ordering, so this costs nothing a client is entitled to.
 func (c *respConn) cmdZScan(args [][]byte) error {
-	cursor, opts, err := c.parseCollectionScan(args)
-	if err != nil {
-		return c.writeFailure(err)
-	}
-
-	after, resumed, known := c.scanResume(cursor)
-	if !known {
-		return c.writeScanPage(cursor, respScanPage{done: true})
-	}
-
-	var page respScanPage
-	if err := c.read(func(tx *kvs.ReadTx) error {
-		zset, err := respReadZSet(tx, string(args[1]))
+	return c.runCollectionScan(args, func(tx *kvs.ReadTx, key string) ([]string, func(string) []string, error) {
+		zset, err := respReadZSet(tx, key)
 		if err != nil {
-			return err
+			return nil, nil, err
 		}
 
-		page = respScanNames(slices.Sorted(maps.Keys(zset.members())), after, resumed, opts,
-			func(member string) []string {
-				score, _ := zset.score(member)
+		return slices.Sorted(maps.Keys(zset.members())), func(member string) []string {
+			score, _ := zset.score(member)
 
-				return []string{member, respFormatFloat(score)}
-			})
-
-		return nil
-	}); err != nil {
-		return c.writeFailure(err)
-	}
-
-	return c.writeScanPage(cursor, page)
+			return []string{member, respFormatFloat(score)}
+		}, nil
+	})
 }
 
 // respScoreBound is one end of a score range. Redis writes an exclusive bound with a

@@ -85,8 +85,12 @@ func (r *Reader) ReadCommand() ([][]byte, error) {
 	return args, nil
 }
 
-// readLine returns the next CRLF-terminated line without its terminator. The result
-// points into the read buffer and stays valid only until the next read.
+// readLine returns the next line without its terminator. The result points into the read
+// buffer and stays valid only until the next read.
+//
+// Clients terminate every line with CRLF, but a bare LF is accepted too: that is what a
+// hand-typed inline command over telnet or nc sends, and Redis tolerates it for the same
+// reason. Bulk payloads are still framed strictly, since nothing types those by hand.
 func (r *Reader) readLine() ([]byte, error) {
 	line, err := r.br.ReadSlice('\n')
 	if err != nil {
@@ -97,11 +101,12 @@ func (r *Reader) readLine() ([]byte, error) {
 		return nil, err
 	}
 
-	if len(line) < len(crlf) || line[len(line)-2] != '\r' {
-		return nil, fmt.Errorf("%w: unterminated line", ErrProtocol)
+	line = line[:len(line)-1]
+	if len(line) > 0 && line[len(line)-1] == '\r' {
+		line = line[:len(line)-1]
 	}
 
-	return line[:len(line)-len(crlf)], nil
+	return line, nil
 }
 
 func (r *Reader) readBulk() ([]byte, error) {

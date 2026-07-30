@@ -21,6 +21,11 @@ const (
 	// respScanCursorLimit bounds how many unfinished iterations the server remembers, since an
 	// abandoned cursor is otherwise never forgotten. One walk holds one entry.
 	respScanCursorLimit = 1024
+
+	// respRandomKeyTries is how many samples RANDOMKEY takes before reporting an empty
+	// keyspace, since the cached key order still lists keys that expired without being
+	// reclaimed. Redis gives up after the same number.
+	respRandomKeyTries = 100
 )
 
 // respCursors remembers, per open cursor, the last name a scan reached.
@@ -30,9 +35,8 @@ const (
 // different sockets, and per-connection state made the second one report an empty final page.
 // A cursor is only a resume point, so it is harmless for any connection to present it.
 type respCursors struct {
-	mu   sync.Mutex
-	at   map[uint64]string
-	last uint64
+	mu sync.Mutex
+	at map[uint64]string
 }
 
 // resume reports where a cursor left off. Cursor zero starts a fresh iteration.
@@ -51,6 +55,10 @@ func (r *respCursors) resume(cursor uint64) (after string, resumed, known bool) 
 
 // remember stores where a page stopped, reusing the handle when an iteration is already under
 // way so a client sees one stable cursor per walk.
+//
+// A new handle is drawn at random rather than counted up. The table is server-wide, so a
+// counter hands out the small numbers a client is most likely to present on its own, and
+// presenting a live handle moves someone else's walk. A 64 bit draw makes that miss.
 func (r *respCursors) remember(cursor uint64, resumeAfter string) uint64 {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -68,13 +76,23 @@ func (r *respCursors) remember(cursor uint64, resumeAfter string) uint64 {
 			delete(r.at, id)
 		}
 
-		r.last++
-		cursor = r.last
+		cursor = r.newHandle()
 	}
 
 	r.at[cursor] = resumeAfter
 
 	return cursor
+}
+
+// newHandle draws an unused cursor. Zero is reserved for "start a fresh iteration", so it is
+// never handed out.
+func (r *respCursors) newHandle() uint64 {
+	for {
+		candidate := respRandomUint64()
+		if _, taken := r.at[candidate]; candidate != 0 && !taken {
+			return candidate
+		}
+	}
 }
 
 func (r *respCursors) forget(cursor uint64) {
@@ -198,7 +216,7 @@ func (c *respConn) cmdExpire(args [][]byte) error {
 		return c.writer.WriteError(respErrNotInteger)
 	}
 	if !respExpiryFits(unit, amount) {
-		return c.writer.WriteError("ERR invalid expire time in '" + strings.ToLower(string(args[0])) + "' command")
+		return c.writeFailure(errRESPExpireTime(string(args[0])))
 	}
 
 	var applied bool
@@ -253,25 +271,9 @@ func (c *respConn) cmdPersist(args [][]byte) error {
 // cmdGetEx reads a key and adjusts its expiry in one step. PERSIST clears the expiry, and
 // no option at all leaves it untouched.
 func (c *respConn) cmdGetEx(args [][]byte) error {
-	persist := false
-	var opts respSetOptions
-
-	if rest := args[2:]; len(rest) > 0 {
-		if strings.EqualFold(string(rest[0]), respCmdPersist) {
-			if len(rest) != 1 {
-				return c.writer.WriteError(respErrSyntax)
-			}
-			persist = true
-		} else {
-			parsed, err := parseSetOptions(rest)
-			if err != nil {
-				return c.writeFailure(err)
-			}
-			if parsed.expiry == "" {
-				return c.writer.WriteError(respErrSyntax)
-			}
-			opts = parsed
-		}
+	opts, persist, err := parseGetExOptions(args[2:])
+	if err != nil {
+		return c.writeFailure(err)
 	}
 
 	var value []byte
@@ -302,6 +304,32 @@ func (c *respConn) cmdGetEx(args [][]byte) error {
 	}
 
 	return c.writer.WriteBulk(value)
+}
+
+// parseGetExOptions reads the trailing options of GETEX, which are either PERSIST on its own
+// or one expiry. The expiry parser is shared with SET, so the flags only SET takes are
+// refused here rather than accepted and silently ignored, as "GETEX key EX 10 NX" was.
+func parseGetExOptions(rest [][]byte) (opts respSetOptions, persist bool, err error) {
+	if len(rest) == 0 {
+		return opts, false, nil
+	}
+
+	if strings.EqualFold(string(rest[0]), respCmdPersist) {
+		if len(rest) != 1 {
+			return opts, false, errRESPSyntax
+		}
+
+		return opts, true, nil
+	}
+
+	if opts, err = parseSetOptions("GETEX", rest); err != nil {
+		return opts, false, err
+	}
+	if opts.expiry == "" || opts.nx || opts.xx || opts.get || opts.keepTTL {
+		return opts, false, errRESPSyntax
+	}
+
+	return opts, false, nil
 }
 
 // cmdRename handles RENAME and RENAMENX.
@@ -389,9 +417,21 @@ func (c *respConn) cmdRandomKey(_ [][]byte) error {
 	found := false
 
 	if err := c.read(func(tx *kvs.ReadTx) error {
-		// Go randomizes map iteration order, so the first key is already an arbitrary one.
-		if keys := tx.Keys(); len(keys) > 0 {
-			key, found = keys[0], true
+		// SortedKeys is cached, so picking an index costs nothing, where listing the keyspace
+		// to take its first entry allocated a slice of every key on every call. The cached
+		// order still lists keys that expired without being reclaimed, so skip past those.
+		keys := tx.SortedKeys()
+		if len(keys) == 0 {
+			return nil
+		}
+
+		for range respRandomKeyTries {
+			candidate := keys[respRandomUint64()%uint64(len(keys))]
+			if _, live := tx.Get(candidate); live {
+				key, found = candidate, true
+
+				return nil
+			}
 		}
 
 		return nil
@@ -561,17 +601,42 @@ func isFlushMode(mode string) bool {
 	return strings.EqualFold(mode, "ASYNC") || strings.EqualFold(mode, "SYNC")
 }
 
-// parseCollectionScan reads the cursor and trailing options of HSCAN, SSCAN, and ZSCAN,
-// which all place the key before the cursor.
-func (c *respConn) parseCollectionScan(args [][]byte) (uint64, respScanOptions, error) {
+// respCollectionLoader reads the container at key and reports its member names in sorted
+// order together with the emit that turns one name into the values the reply carries.
+type respCollectionLoader func(tx *kvs.ReadTx, key string) (names []string, emit func(string) []string, err error)
+
+// runCollectionScan drives HSCAN, SSCAN, and ZSCAN, which differ only in the container they
+// walk: they all place the key before the cursor and page it the same way.
+func (c *respConn) runCollectionScan(args [][]byte, load respCollectionLoader) error {
 	cursor, err := strconv.ParseUint(string(args[2]), 10, 64)
 	if err != nil {
-		return 0, respScanOptions{}, errRESPInvalidCursor
+		return c.writeFailure(errRESPInvalidCursor)
 	}
 
 	opts, err := parseScanOptions(args[3:])
+	if err != nil {
+		return c.writeFailure(err)
+	}
 
-	return cursor, opts, err
+	after, resumed, known := c.scanResume(cursor)
+	if !known {
+		return c.writeScanPage(cursor, respScanPage{done: true})
+	}
+
+	var page respScanPage
+	if err := c.read(func(tx *kvs.ReadTx) error {
+		names, emit, loadErr := load(tx, string(args[1]))
+		if loadErr != nil {
+			return loadErr
+		}
+		page = respScanNames(names, after, resumed, opts, emit)
+
+		return nil
+	}); err != nil {
+		return c.writeFailure(err)
+	}
+
+	return c.writeScanPage(cursor, page)
 }
 
 // respScanOptions holds the trailing options shared by SCAN and its per-type variants.

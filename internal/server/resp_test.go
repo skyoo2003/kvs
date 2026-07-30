@@ -226,6 +226,20 @@ func TestRESPHandshakeCommands(t *testing.T) {
 	client.do("*0"+respCRLF, "CONFIG", "GET", "no-such-parameter")
 }
 
+// TestRESPServerRefusesConnectionsPastTheCeiling covers the bound on open sessions. Each one
+// costs a goroutine, a read buffer, and a push budget, so a listener without a ceiling grows
+// until the process runs out of memory.
+func TestRESPServerRefusesConnectionsPastTheCeiling(t *testing.T) {
+	server := NewRESPServer(nil, "")
+	for range respMaxConns {
+		server.conns[&respConn{}] = struct{}{}
+	}
+
+	if server.track(&respConn{}) {
+		t.Fatal("track() = true at the ceiling, want the connection refused")
+	}
+}
+
 func TestRESPHelloRefusesRESP3(t *testing.T) {
 	client := newRESPClient(t, kvs.NewStore())
 

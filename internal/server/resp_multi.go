@@ -190,25 +190,30 @@ func (c *respConn) clearWatches() {
 // cmdAuth checks a client credential. Redis accepts both the bare password form and the
 // username form, where the only built-in user is "default".
 func (c *respConn) cmdAuth(args [][]byte) error {
-	if c.server.password == "" {
-		return c.writer.WriteError(
-			"ERR Client sent AUTH, but no password is set. Did you mean AUTH <username> <password>?",
-		)
-	}
-
-	password := args[1]
+	user, password := []byte(respDefaultUser), args[1]
 	if len(args) == 3 {
-		if string(args[1]) != respDefaultUser {
-			return c.writer.WriteError(respErrWrongPass)
-		}
-		password = args[2]
+		user, password = args[1], args[2]
 	}
 
-	if !c.checkPassword(password) {
-		return c.writer.WriteError(respErrWrongPass)
+	if err := c.authenticate(user, password); err != nil {
+		return c.writeFailure(err)
+	}
+
+	return c.writer.WriteSimple(respOK)
+}
+
+// authenticate checks one credential pair. HELLO carries the same clause, so it answers here
+// too: a server with no password told an AUTH client so plainly and left a HELLO client
+// reading WRONGPASS, which points at the wrong problem entirely.
+func (c *respConn) authenticate(user, password []byte) error {
+	if c.server.password == "" {
+		return errRESPNoPassword
+	}
+	if string(user) != respDefaultUser || !c.checkPassword(password) {
+		return errRESPWrongPass
 	}
 
 	c.authed = true
 
-	return c.writer.WriteSimple(respOK)
+	return nil
 }

@@ -27,6 +27,9 @@ $ kvs --config config.yaml serve
 | `--resp-addr` | Redis/Valkey (RESP) listen address, `none` to disable | `127.0.0.1:6379` |
 | `--config` | Path to Viper-compatible config file | — |
 
+If the default RESP port is already taken, kvs warns and starts without it. An address you
+name yourself has to bind, or `serve` fails.
+
 ### Configuration without flags
 
 Every flag has a config file and environment equivalent. The RESP password has **only**

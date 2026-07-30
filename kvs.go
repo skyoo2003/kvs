@@ -221,7 +221,7 @@ func (tx *Tx) Get(key string) (Entry, bool) {
 		return Entry{}, false
 	}
 	if tx.expired(entry) {
-		tx.remove(key)
+		tx.discard(key)
 
 		return Entry{}, false
 	}
@@ -275,12 +275,20 @@ func (tx *Tx) Flush() {
 	tx.store.signalFlush()
 }
 
-// remove deletes key and keeps the expiry index in step.
+// remove deletes key as a change callers can see, so it marks the key's watchers.
 func (tx *Tx) remove(key string) {
+	tx.discard(key)
+	tx.store.signalChange(key)
+}
+
+// discard reclaims key and keeps the expiry index in step, without marking its watchers.
+// Reclaiming a key that has already expired is bookkeeping rather than a change: a watch
+// survives its key reaching an expiry it was armed against, and otherwise the sweep's random
+// sample would decide whether an unrelated caller's optimistic commit went through.
+func (tx *Tx) discard(key string) {
 	delete(tx.store.data, key)
 	delete(tx.store.expires, key)
 	tx.store.sorted = nil
-	tx.store.signalChange(key)
 }
 
 // reapExpired reclaims expired keys from a bounded sample of those that carry an expiry. Go
@@ -298,7 +306,7 @@ func (tx *Tx) reapExpired() {
 		inspected++
 
 		if entry, ok := tx.store.data[key]; !ok || tx.expired(entry) {
-			tx.remove(key)
+			tx.discard(key)
 		}
 	}
 }

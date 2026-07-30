@@ -293,30 +293,13 @@ func (c *respConn) cmdHIncrByFloat(args [][]byte) error {
 }
 
 func (c *respConn) cmdHScan(args [][]byte) error {
-	cursor, opts, err := c.parseCollectionScan(args)
-	if err != nil {
-		return c.writeFailure(err)
-	}
-
-	after, resumed, known := c.scanResume(cursor)
-	if !known {
-		return c.writeScanPage(cursor, respScanPage{done: true})
-	}
-
-	var page respScanPage
-	if err := c.read(func(tx *kvs.ReadTx) error {
-		hash, err := respReadHash(tx, string(args[1]))
+	return c.runCollectionScan(args, func(tx *kvs.ReadTx, key string) ([]string, func(string) []string, error) {
+		hash, err := respReadHash(tx, key)
 		if err != nil {
-			return err
+			return nil, nil, err
 		}
 
-		page = respScanNames(slices.Sorted(maps.Keys(hash)), after, resumed, opts,
-			func(field string) []string { return []string{field, hash[field]} })
-
-		return nil
-	}); err != nil {
-		return c.writeFailure(err)
-	}
-
-	return c.writeScanPage(cursor, page)
+		return slices.Sorted(maps.Keys(hash)),
+			func(field string) []string { return []string{field, hash[field]} }, nil
+	})
 }

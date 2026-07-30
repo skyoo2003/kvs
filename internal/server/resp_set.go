@@ -242,32 +242,15 @@ func (c *respConn) cmdSetOp(args [][]byte) error {
 }
 
 func (c *respConn) cmdSScan(args [][]byte) error {
-	cursor, opts, err := c.parseCollectionScan(args)
-	if err != nil {
-		return c.writeFailure(err)
-	}
-
-	after, resumed, known := c.scanResume(cursor)
-	if !known {
-		return c.writeScanPage(cursor, respScanPage{done: true})
-	}
-
-	var page respScanPage
-	if err := c.read(func(tx *kvs.ReadTx) error {
-		set, err := respReadSet(tx, string(args[1]))
+	return c.runCollectionScan(args, func(tx *kvs.ReadTx, key string) ([]string, func(string) []string, error) {
+		set, err := respReadSet(tx, key)
 		if err != nil {
-			return err
+			return nil, nil, err
 		}
 
-		page = respScanNames(slices.Sorted(maps.Keys(set)), after, resumed, opts,
-			func(member string) []string { return []string{member} })
-
-		return nil
-	}); err != nil {
-		return c.writeFailure(err)
-	}
-
-	return c.writeScanPage(cursor, page)
+		return slices.Sorted(maps.Keys(set)),
+			func(member string) []string { return []string{member} }, nil
+	})
 }
 
 // respCombineSets applies the named set operation against the first set.

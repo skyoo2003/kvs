@@ -1,6 +1,8 @@
 package server
 
 import (
+	"crypto/rand"
+	"encoding/binary"
 	"strconv"
 	"strings"
 )
@@ -8,6 +10,17 @@ import (
 // respUpper normalizes a command or option name for comparison.
 func respUpper(arg []byte) string {
 	return strings.ToUpper(string(arg))
+}
+
+// respRandomUint64 draws a number the protocol needs to be arbitrary. RANDOMKEY only wants an
+// index, but a scan handle also has to be one a client cannot guess and then present as its
+// own, so both draw from the strong source rather than leave a weak one in the package.
+func respRandomUint64() uint64 {
+	var buf [8]byte
+	// crypto/rand.Read fills the buffer or panics; it does not report a short read.
+	_, _ = rand.Read(buf[:])
+
+	return binary.NativeEndian.Uint64(buf[:])
 }
 
 func boolToInt(value bool) int64 {

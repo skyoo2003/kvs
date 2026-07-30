@@ -42,7 +42,6 @@ var (
 	errRESPOverflow   = errors.New("ERR increment or decrement would overflow")
 	errRESPRange      = errors.New("ERR value is out of range, must be positive")
 	errRESPNoSuchKey  = errors.New("ERR no such key")
-	errRESPBadExpiry  = errors.New("ERR invalid expire time")
 
 	errRESPStringTooLong = errors.New(respErrStringTooLong)
 
@@ -54,9 +53,12 @@ var (
 	errRESPNoIncrOption   = errors.New("ERR ZADD with the INCR option is not supported")
 	errRESPNaNResult      = errors.New("ERR resulting score is not a number (NaN)")
 
-	// errRESPWrongPass carries a protocol message rather than a Go error message, so it keeps
-	// the exact text and trailing punctuation Redis sends.
-	errRESPWrongPass error = respWireError(respErrWrongPass)
+	// errRESPWrongPass and errRESPNoPassword carry protocol messages rather than Go error
+	// messages, so they keep the exact text and trailing punctuation Redis sends.
+	errRESPWrongPass  error = respWireError(respErrWrongPass)
+	errRESPNoPassword error = respWireError(
+		"ERR Client sent AUTH, but no password is set. Did you mean AUTH <username> <password>?",
+	)
 )
 
 // respWireError is a reply the client sees verbatim, carried as an error so that a parsing
@@ -65,6 +67,13 @@ type respWireError string
 
 func (e respWireError) Error() string {
 	return string(e)
+}
+
+// errRESPExpireTime is what Redis answers when a command carries an expiry it cannot use,
+// naming the command that carried it. Every command taking an expiry reports it the same way,
+// so that a client branching on the text is not told two different stories.
+func errRESPExpireTime(command string) error {
+	return respWireError("ERR invalid expire time in '" + strings.ToLower(command) + "' command")
 }
 
 // respStringOf returns the string a key holds, refusing keys that hold another type the
@@ -116,7 +125,9 @@ type respSetOptions struct {
 	expiryArg int64
 }
 
-func parseSetOptions(args [][]byte) (respSetOptions, error) {
+// parseSetOptions reads the trailing options of SET. command names the caller, since GETEX
+// shares this parser and an unusable expiry has to name the command the client actually sent.
+func parseSetOptions(command string, args [][]byte) (respSetOptions, error) {
 	var opts respSetOptions
 
 	for i := 0; i < len(args); i++ {
@@ -130,7 +141,7 @@ func parseSetOptions(args [][]byte) (respSetOptions, error) {
 		case respOptKeepTTL:
 			opts.keepTTL = true
 		default:
-			if err := opts.setExpiry(name, args[i+1:]); err != nil {
+			if err := opts.setExpiry(command, name, args[i+1:]); err != nil {
 				return opts, err
 			}
 			i++
@@ -144,7 +155,7 @@ func parseSetOptions(args [][]byte) (respSetOptions, error) {
 	return opts, nil
 }
 
-func (o *respSetOptions) setExpiry(unit string, rest [][]byte) error {
+func (o *respSetOptions) setExpiry(command, unit string, rest [][]byte) error {
 	if _, ok := respExpiryAt(unit, 0, time.Time{}); !ok {
 		return errRESPSyntax
 	}
@@ -157,10 +168,10 @@ func (o *respSetOptions) setExpiry(unit string, rest [][]byte) error {
 		return errRESPNotInteger
 	}
 	if amount <= 0 && (unit == respUnitEX || unit == respUnitPX) {
-		return errRESPRange
+		return errRESPExpireTime(command)
 	}
 	if !respExpiryFits(unit, amount) {
-		return errRESPBadExpiry
+		return errRESPExpireTime(command)
 	}
 
 	o.expiry, o.expiryArg = unit, amount
@@ -202,7 +213,7 @@ func (c *respConn) cmdGet(args [][]byte) error {
 }
 
 func (c *respConn) cmdSet(args [][]byte) error {
-	opts, err := parseSetOptions(args[3:])
+	opts, err := parseSetOptions(string(args[0]), args[3:])
 	if err != nil {
 		return c.writeFailure(err)
 	}
@@ -281,7 +292,7 @@ func (c *respConn) cmdSetEX(args [][]byte) error {
 		return c.writer.WriteError(respErrNotInteger)
 	}
 	if amount <= 0 || !respExpiryFits(unit, amount) {
-		return c.writer.WriteError("ERR invalid expire time in '" + strings.ToLower(string(args[0])) + "' command")
+		return c.writeFailure(errRESPExpireTime(string(args[0])))
 	}
 
 	if err := c.write(func(tx *kvs.Tx) error {

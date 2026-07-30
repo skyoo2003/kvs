@@ -269,6 +269,7 @@ func respZSetCommands() map[string]respCommand {
 var respConfigParams = map[string]string{
 	"appendonly":         "no",
 	"databases":          "1",
+	"maxclients":         strconv.Itoa(respMaxConns),
 	"maxmemory":          "0",
 	"maxmemory-policy":   "noeviction",
 	"proto-max-bulk-len": strconv.Itoa(resp.MaxBulkLength),
@@ -359,34 +360,42 @@ func (c *respConn) cmdHello(args [][]byte) error {
 
 // applyHelloOptions handles the AUTH and SETNAME clauses HELLO accepts, which is how a
 // client authenticates and names itself in the same round trip as the handshake.
+// The name is applied only once the whole option list has parsed, so a HELLO that fails on a
+// later clause does not leave the connection renamed by an earlier one.
 func (c *respConn) applyHelloOptions(args [][]byte) error {
+	name := ""
+	named := false
+
 	for i := 2; i < len(args); i++ {
 		switch respUpper(args[i]) {
 		case respCmdAuth:
 			if i+2 >= len(args) {
 				return errRESPSyntax
 			}
-			if string(args[i+1]) != respDefaultUser || !c.checkPassword(args[i+2]) {
-				return errRESPWrongPass
+			if err := c.authenticate(args[i+1], args[i+2]); err != nil {
+				return err
 			}
-			c.authed = true
 			i += 2
 		case respSubSetName:
 			if i+1 >= len(args) {
 				return errRESPSyntax
 			}
-			c.name = string(args[i+1])
+			name, named = string(args[i+1]), true
 			i++
 		default:
 			return errRESPSyntax
 		}
 	}
 
+	if named {
+		c.name = name
+	}
+
 	return nil
 }
 
 func (c *respConn) cmdClient(args [][]byte) error {
-	switch strings.ToUpper(string(args[1])) {
+	switch respUpper(args[1]) {
 	case "ID":
 		return c.writer.WriteInt(c.id)
 	case "GETNAME":
@@ -435,9 +444,16 @@ func (c *respConn) cmdSelect(args [][]byte) error {
 // cmdInfo reports every section regardless of the requested one. Clients scan the reply
 // for the fields they need, so a superset is safe.
 func (c *respConn) cmdInfo(_ [][]byte) error {
-	keyCount := 0
+	keyCount, expiring := 0, 0
 	if err := c.read(func(tx *kvs.ReadTx) error {
-		keyCount = tx.Len()
+		// One walk counts both, since the keyspace line reports the live keys and how many of
+		// them carry a TTL. INFO is rare enough not to warrant a maintained counter.
+		for _, key := range tx.Keys() {
+			keyCount++
+			if entry, ok := tx.Get(key); ok && !entry.ExpiresAt.IsZero() {
+				expiring++
+			}
+		}
 
 		return nil
 	}); err != nil {
@@ -462,7 +478,7 @@ func (c *respConn) cmdInfo(_ [][]byte) error {
 		"# Keyspace",
 	}
 	if keyCount > 0 {
-		lines = append(lines, "db0:keys="+strconv.Itoa(keyCount)+",expires=0,avg_ttl=0")
+		lines = append(lines, fmt.Sprintf("db0:keys=%d,expires=%d,avg_ttl=0", keyCount, expiring))
 	}
 	lines = append(lines, "")
 
@@ -470,7 +486,7 @@ func (c *respConn) cmdInfo(_ [][]byte) error {
 }
 
 func (c *respConn) cmdConfig(args [][]byte) error {
-	switch strings.ToUpper(string(args[1])) {
+	switch respUpper(args[1]) {
 	case "GET":
 		if len(args) < 3 {
 			return c.wrongArgs("config|get")

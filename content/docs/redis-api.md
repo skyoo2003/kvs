@@ -30,6 +30,15 @@ $ kvs serve --resp-addr :6379            # every interface
 $ kvs serve --resp-addr none             # RESP disabled
 ```
 
+If something already holds the default port — a local Redis, say — kvs logs a warning, leaves
+RESP off, and serves HTTP and gRPC as usual. An address you name yourself is different: kvs
+refuses to start rather than quietly ignore it.
+
+The server holds at most **10000** connections at once, the Redis `maxclients` default, and
+answers `ERR max number of clients reached` past that. A client that connects and sends
+nothing within 30 seconds is dropped; once it has sent a command it may idle indefinitely,
+which is what a subscriber does.
+
 ### Authentication
 
 Set a password to require `AUTH`. There is deliberately **no command line flag**: an

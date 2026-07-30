@@ -4,12 +4,15 @@ import (
 	"crypto/subtle"
 	"errors"
 	"fmt"
+	"log"
 	"maps"
 	"net"
+	"runtime/debug"
 	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/skyoo2003/kvs"
 	"github.com/skyoo2003/kvs/pkg/resp"
@@ -30,6 +33,19 @@ const (
 	respErrDecrOver   = "ERR decrement would overflow"
 	respErrNoAuth     = "NOAUTH Authentication required."
 	respErrWrongPass  = "WRONGPASS invalid username-password pair or user is disabled."
+	respErrMaxClients = "ERR max number of clients reached"
+
+	// respMaxConns bounds the sessions the server holds at once, matching the Redis maxclients
+	// default. Each one costs a goroutine, a read buffer, and a push budget, so without a
+	// ceiling an exposed listener grows until the process runs out of memory.
+	// ponytail: a constant, worth a config knob only once someone needs a different ceiling.
+	respMaxConns = 10000
+
+	// respHandshakeTimeout bounds how long a client may stay silent before its first command.
+	// It only covers the handshake: a session that has spoken once may then idle forever, which
+	// is what a pub/sub subscriber does and why Redis leaves its own timeout off by default.
+	// The cost is that typing into a raw telnet session has to start within the window.
+	respHandshakeTimeout = 30 * time.Second
 
 	// respPushDepth and respPushBytes bound one subscriber's backlog by both message count
 	// and memory, the way Redis bounds a client output buffer. A subscriber that exceeds
@@ -103,10 +119,19 @@ func (s *RESPServer) Serve(listener net.Listener) error {
 		}
 
 		conn := s.newConn(netConn)
-		if !s.track(conn) {
+		if s.isClosed() {
 			_ = netConn.Close()
 
 			return nil
+		}
+		if !s.track(conn) {
+			// Over the ceiling: name the reason before hanging up, the way Redis does, so the
+			// client reports a full server rather than a connection dropped without a word.
+			_ = conn.writer.WriteError(respErrMaxClients)
+			_ = conn.writer.Flush()
+			_ = netConn.Close()
+
+			continue
 		}
 
 		go func() {
@@ -174,7 +199,7 @@ func (s *RESPServer) track(conn *respConn) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.closed {
+	if s.closed || len(s.conns) >= respMaxConns {
 		return false
 	}
 
@@ -323,6 +348,13 @@ func (c *respConn) flush() error {
 
 func (c *respConn) serve() {
 	defer func() {
+		// A session parses untrusted bytes, so an unforeseen panic here would otherwise take
+		// the HTTP and gRPC servers down with it. net/http guards each connection the same
+		// way, and losing one client beats losing the process.
+		if panicked := recover(); panicked != nil {
+			log.Printf("resp: connection %d panicked: %v\n%s", c.id, panicked, debug.Stack())
+		}
+
 		c.server.broker.dropConn(c)
 		c.clearWatches()
 		close(c.done)
@@ -331,12 +363,21 @@ func (c *respConn) serve() {
 
 	go c.pumpPushes()
 
+	// A client that connects and then says nothing would otherwise hold its slot, goroutine,
+	// and buffers for the life of the process. The deadline is lifted as soon as it speaks.
+	_ = c.netConn.SetReadDeadline(time.Now().Add(respHandshakeTimeout))
+	waitingForFirst := true
+
 	for {
 		args, err := c.reader.ReadCommand()
 		if err != nil {
 			c.reportReadError(err)
 
 			return
+		}
+		if waitingForFirst {
+			_ = c.netConn.SetReadDeadline(time.Time{})
+			waitingForFirst = false
 		}
 		if len(args) == 0 {
 			continue

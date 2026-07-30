@@ -32,6 +32,12 @@ func TestReaderReadCommand(t *testing.T) {
 			want:  [][]byte{[]byte("SET"), []byte("foo"), []byte("bar")},
 		},
 		{
+			// telnet and nc send a bare LF, which is the whole point of the inline form.
+			name:  "inline form terminated by a bare line feed",
+			input: "PING\n",
+			want:  [][]byte{[]byte("PING")},
+		},
+		{
 			name:  "empty bulk string is not a null",
 			input: "*1\r\n$0\r\n\r\n",
 			want:  [][]byte{{}},
@@ -81,7 +87,6 @@ func TestReaderRejectsMalformedInput(t *testing.T) {
 		name  string
 		input string
 	}{
-		{name: "line without carriage return", input: "PING\n"},
 		{name: "non numeric array length", input: "*abc\r\n"},
 		{name: "argument is not a bulk string", input: "*1\r\n+OK\r\n"},
 		{name: "non numeric bulk length", input: "*1\r\n$xx\r\nab\r\n"},

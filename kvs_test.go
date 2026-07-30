@@ -179,6 +179,46 @@ func TestStoreWatchSeesDeleteAndFlush(t *testing.T) {
 	}
 }
 
+// TestStoreWatchIgnoresExpiryReclaim pins the difference between a change and bookkeeping: a
+// watched key reaching an expiry it was armed against is not a conflict, so neither the lazy
+// removal on read nor the sampling sweep may mark the watch. Marking it would hand the sweep's
+// random sample a say in whether an unrelated caller's optimistic commit went through.
+func TestStoreWatchIgnoresExpiryReclaim(t *testing.T) {
+	store := NewStore()
+	if err := store.Write(func(tx *Tx) error {
+		tx.Set("k", Entry{Value: "v", ExpiresAt: time.Now().Add(-time.Second)})
+
+		return nil
+	}); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+
+	watch := store.Watch("k")
+	defer watch.Close()
+
+	// A read reclaims it lazily, and an unrelated write sweeps whatever is left.
+	if _, err := store.Get("k"); !errors.Is(err, ErrKeyNotFound) {
+		t.Fatalf("Get() expired key error = %v, want %v", err, ErrKeyNotFound)
+	}
+	if err := store.Put("unrelated", "v"); err != nil {
+		t.Fatalf("Put() error = %v", err)
+	}
+	if got := store.tracked(); got != 1 {
+		t.Fatalf("stored entries = %d, want the expired key reclaimed", got)
+	}
+	if watch.Conflicted() {
+		t.Fatal("Conflicted() = true after the watched key merely expired")
+	}
+
+	// A real write to the same key still counts.
+	if err := store.Put("k", "v"); err != nil {
+		t.Fatalf("Put() error = %v", err)
+	}
+	if !watch.Conflicted() {
+		t.Fatal("Conflicted() = false after the watched key was written")
+	}
+}
+
 func TestStoreWatchCloseStopsTracking(t *testing.T) {
 	store := NewStore()
 

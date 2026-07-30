@@ -239,6 +239,12 @@ func TestRESPAuthWithoutPasswordConfigured(t *testing.T) {
 	if line := client.readLine(); !strings.HasPrefix(line, "-ERR Client sent AUTH, but no password is set") {
 		t.Fatalf("AUTH reply = %q, want the no-password error", line)
 	}
+
+	// HELLO carries the same clause and used to answer WRONGPASS here, which sent operators
+	// looking for a credential mismatch on a server that has no credential at all.
+	client.do("-"+errRESPNoPassword.Error()+respCRLF, "HELLO", "2", "SETNAME", "prober", "AUTH", "default", "pw")
+	// The clause that ran before the failure must not have taken effect either.
+	client.do("$-1"+respCRLF, "CLIENT", "GETNAME")
 }
 
 func TestRESPResetClearsConnectionState(t *testing.T) {
