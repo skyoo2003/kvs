@@ -58,6 +58,65 @@ func TestRESPTransactionAbortsAfterQueueError(t *testing.T) {
 
 // TestRESPTransactionReportsCommandErrorsInline checks that an error raised while running a
 // queued command is one element of the reply array, not a failure of the whole EXEC.
+// TestRESPTransactionRefusesOversizedQueue keeps one client's MULTI from growing without bound.
+// The queue retained every queued command's arguments with no ceiling, so a single connection
+// could queue until the process ran out of memory, and that takes the HTTP and gRPC servers
+// sharing the process down with it.
+func TestRESPTransactionRefusesOversizedQueue(t *testing.T) {
+	client := newRESPClient(t, kvs.NewStore())
+
+	client.do("+OK"+respCRLF, "MULTI")
+
+	// Queue past any sane ceiling. One command per megabyte keeps the round trips bounded.
+	const megabytes = 128
+	chunk := strings.Repeat("x", 1<<20)
+
+	refused := false
+	for i := range megabytes {
+		client.send("SET", "k:"+itoa(i), chunk)
+
+		reply := client.readLine()
+		if reply == "+QUEUED" {
+			continue
+		}
+		if !strings.HasPrefix(reply, "-ERR") {
+			t.Fatalf("queued command %d reply = %q, want +QUEUED or an error", i, reply)
+		}
+		refused = true
+
+		break
+	}
+	if !refused {
+		t.Fatalf("one MULTI queued %d MiB without refusal, want a ceiling", megabytes)
+	}
+
+	// A refused command has to poison the batch. Running it half-formed would apply some of the
+	// writes the client asked for and drop the rest without saying which.
+	client.do("-EXECABORT Transaction discarded because of previous errors."+respCRLF, "EXEC")
+	client.do("$-1"+respCRLF, "GET", "k:0")
+}
+
+// TestRESPTransactionQueueBudgetResets keeps a refused batch from disabling the connection: the
+// budget belongs to one transaction, not to the session.
+func TestRESPTransactionQueueBudgetResets(t *testing.T) {
+	client := newRESPClient(t, kvs.NewStore())
+
+	chunk := strings.Repeat("x", 1<<20)
+	client.do("+OK"+respCRLF, "MULTI")
+	for i := range 128 {
+		client.send("SET", "k:"+itoa(i), chunk)
+		if client.readLine() != "+QUEUED" {
+			break
+		}
+	}
+	client.do("-EXECABORT Transaction discarded because of previous errors."+respCRLF, "EXEC")
+
+	client.do("+OK"+respCRLF, "MULTI")
+	client.do("+QUEUED"+respCRLF, "SET", "after", "v")
+	client.do("*1"+respCRLF+"+OK"+respCRLF, "EXEC")
+	client.do("$1"+respCRLF+"v"+respCRLF, "GET", "after")
+}
+
 func TestRESPTransactionReportsCommandErrorsInline(t *testing.T) {
 	client := newRESPClient(t, kvs.NewStore())
 
@@ -230,6 +289,25 @@ func TestRESPAuthThroughHello(t *testing.T) {
 
 	client.do("$-1"+respCRLF, "GET", "k")
 	client.do("$6"+respCRLF+"prober"+respCRLF, "CLIENT", "GETNAME")
+}
+
+// TestRESPHelloAppliesNothingOnLaterSyntaxError holds the AUTH clause to the same rule SETNAME
+// already follows. AUTH took effect the moment it parsed, so a HELLO rejected by a later clause
+// answered an error on a connection it had quietly authenticated.
+func TestRESPHelloAppliesNothingOnLaterSyntaxError(t *testing.T) {
+	client := newRESPClientWithPassword(t, kvs.NewStore(), "s3cret")
+
+	client.do("-"+respErrSyntax+respCRLF, "HELLO", "2", "AUTH", "default", "s3cret", "GARBAGE")
+	client.do("-"+respErrNoAuth+respCRLF, "GET", "k")
+
+	// A handshake that parses whole still authenticates.
+	client.send("HELLO", "2", "AUTH", "default", "s3cret")
+	client.expect("*14" + respCRLF)
+	for range 13 {
+		client.readBulk()
+	}
+	client.expect("*0" + respCRLF)
+	client.do("$-1"+respCRLF, "GET", "k")
 }
 
 func TestRESPAuthWithoutPasswordConfigured(t *testing.T) {

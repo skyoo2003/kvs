@@ -92,6 +92,11 @@ func TestStoreHidesExpiredEntries(t *testing.T) {
 		if got := len(tx.Keys()); got != 2 {
 			t.Fatalf("len(Keys()) = %d, want 2", got)
 		}
+		// Only "alive" is both live and carrying an expiry: "gone" is past its own and
+		// "forever" never had one.
+		if got := tx.Expiring(); got != 1 {
+			t.Fatalf("Expiring() = %d, want 1", got)
+		}
 
 		return nil
 	}); err != nil {

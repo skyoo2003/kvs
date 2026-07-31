@@ -192,11 +192,24 @@ func (tx *ReadTx) SortedKeys() []string {
 	return tx.store.sorted
 }
 
-// Len counts the live keys.
+// Len counts the live keys. Only a key carrying an expiry can be dead, so the count walks the
+// expiry index and subtracts, rather than walking a keyspace that is usually far larger.
 func (tx *ReadTx) Len() int {
+	return len(tx.store.data) - tx.countExpiring(true)
+}
+
+// Expiring counts the live keys that carry an expiry.
+func (tx *ReadTx) Expiring() int {
+	return tx.countExpiring(false)
+}
+
+// countExpiring counts the keys in the expiry index that are past their expiry when dead is set,
+// and those that are not when it is clear. It does not assume the index is a subset of the
+// keyspace, so a key reclaimed without its index entry cannot make the count drift.
+func (tx *ReadTx) countExpiring(dead bool) int {
 	count := 0
-	for _, entry := range tx.store.data {
-		if !tx.expired(entry) {
+	for key := range tx.store.expires {
+		if entry, ok := tx.store.data[key]; ok && tx.expired(entry) == dead {
 			count++
 		}
 	}

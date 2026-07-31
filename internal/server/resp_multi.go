@@ -45,6 +45,7 @@ func (c *respConn) cmdMulti(_ [][]byte) error {
 
 	c.inMulti = true
 	c.queued = nil
+	c.queuedBytes = 0
 	c.queueError = false
 
 	return c.writer.WriteSimple(respOK)
@@ -73,6 +74,7 @@ func (c *respConn) cmdExec(_ [][]byte) error {
 
 	queued, aborted, watches := c.queued, c.queueError, c.watches
 	c.inMulti, c.queued, c.queueError = false, nil, false
+	c.queuedBytes = 0
 	c.watches, c.watched = nil, nil
 
 	// Closing happens after Write returns, because Close takes the store lock itself.
@@ -174,6 +176,7 @@ func (c *respConn) cmdReset(_ [][]byte) error {
 func (c *respConn) resetTransaction() {
 	c.inMulti = false
 	c.queued = nil
+	c.queuedBytes = 0
 	c.queueError = false
 	c.clearWatches()
 }

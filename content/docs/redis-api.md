@@ -116,6 +116,11 @@ docker run -p 6379:6379 -e KVS_RESP_ADDR=:6379 -e KVS_RESP_PASSWORD=s3cret \
 transaction. `EXEC` runs the whole batch under one lock and encodes its replies before
 releasing it, so a slow client cannot stall other writers.
 
+One transaction may queue up to **64 MiB** of commands. A queue holds every command until `EXEC`
+runs it, so the budget is what keeps one connection from queueing until the process runs out of
+memory. A command over the budget is refused and marks the transaction, so `EXEC` answers
+`EXECABORT` rather than applying part of a batch and dropping the rest.
+
 ### Publish and subscribe
 
 `PSUBSCRIBE` `PUBLISH` `PUNSUBSCRIBE` `SUBSCRIBE` `UNSUBSCRIBE`
@@ -132,9 +137,15 @@ back. go-redis asks for RESP3 by default and downgrades on its own.
 
 **`SCAN` cursors are opaque handles, not offsets.** The keyspace walk is paged and honours
 `COUNT`, and a cursor identifies the last key a call reached rather than a position, so
-deleting keys the walk has already passed cannot make it skip one. Because the handle lives
-on the connection, a cursor from a different connection reads as a finished iteration rather
-than an error.
+deleting keys the walk has already passed cannot make it skip one. The handle lives on the
+server rather than on the connection, because client libraries pool connections: the `SCAN` that
+opens an iteration and the one that continues it routinely land on different sockets.
+
+The server remembers **1024** unfinished iterations. Past that, opening a new one forgets an
+arbitrary earlier handle, and a forgotten cursor answers `ERR invalid cursor`. That is
+deliberately an error rather than an empty final page: `0` with no keys is the protocol's signal
+that a walk is complete, so answering it there would tell a client it had enumerated a keyspace
+it had barely started. A client that sees it should start the iteration again.
 
 `HSCAN`, `SSCAN`, and `ZSCAN` page the same way over their own elements. `ZSCAN` walks a
 sorted set by member name rather than by score, because a cursor has to resume in an order
@@ -160,6 +171,8 @@ keyspace notifications, streams, blocking commands (`BLPOP` and friends), ACLs b
 single password, RESP3 push and attribute types, `MONITOR`, `OBJECT`, bit operations, `GEO`,
 and HyperLogLog.
 
-`ZADD` with `INCR` and the `NX`, `XX`, `GT`, and `LT` options on `EXPIRE` are also absent.
+`ZADD` with `INCR` and the `NX`, `XX`, `GT`, and `LT` options on `EXPIRE` are also absent, as is
+`LIMIT` on `ZRANGEBYSCORE` and `ZREVRANGEBYSCORE`. `ZRANGE` takes positions only, so its
+`BYSCORE`, `BYLEX`, and `REV` forms are absent too; `ZRANGEBYSCORE` and `ZREVRANGE` cover them.
 Anything unimplemented answers with an error, so a client discovers it rather than getting a
 wrong result.

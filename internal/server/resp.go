@@ -53,6 +53,22 @@ const (
 	// fast its subscribers read.
 	respPushDepth = 1024
 	respPushBytes = 8 * 1024 * 1024
+
+	// respMaxQueuedBytes bounds one transaction's queue, the way respPushBytes bounds a
+	// subscriber's backlog. A queue holds every command's arguments until EXEC, and EXEC then
+	// encodes every reply into memory as well, so without a ceiling one client can queue until
+	// the process runs out of memory. That takes the HTTP and gRPC servers down with it, since
+	// all three share the process.
+	// ponytail: per-connection, so the worst case is still this times respMaxConns, the same
+	// shape as respPushBytes; a budget shared across connections only if that ever bites.
+	respMaxQueuedBytes = 64 * 1024 * 1024
+
+	// respQueueOverhead is charged per queued command on top of its arguments, so that a batch
+	// of tiny commands is bounded by the same budget as a batch of large ones. The slice headers
+	// behind one parsed command cost more than its bytes do when the bytes are few.
+	respQueueOverhead = 64
+
+	respErrQueueTooBig = "ERR transaction queue exceeds the per-connection budget"
 )
 
 // errRESPQuit reports that the client asked to end the session, so the connection should
@@ -270,11 +286,13 @@ type respConn struct {
 	tx *kvs.Tx
 
 	// Transaction state between MULTI and EXEC. Each WATCH adds a handle the store marks
-	// when one of its keys changes.
-	inMulti    bool
-	queued     [][][]byte
-	queueError bool
-	watches    []*kvs.Watch
+	// when one of its keys changes. queuedBytes is what the queue costs so far, against
+	// respMaxQueuedBytes.
+	inMulti     bool
+	queued      [][][]byte
+	queuedBytes int
+	queueError  bool
+	watches     []*kvs.Watch
 
 	// watched is the set of keys this connection already holds a handle for, so that a client
 	// repeating WATCH does not register the same key twice. Without it a loop of WATCH calls
@@ -361,7 +379,19 @@ func (c *respConn) serve() {
 		_ = c.netConn.Close()
 	}()
 
-	go c.pumpPushes()
+	// The pump writes to the same connection, so it needs the same net the loop below has: a
+	// panic on a goroutine nobody recovers takes the process, and with it the HTTP and gRPC
+	// servers, which is the outcome the recover above exists to prevent.
+	go func() {
+		defer func() {
+			if panicked := recover(); panicked != nil {
+				log.Printf("resp: connection %d push pump panicked: %v\n%s", c.id, panicked, debug.Stack())
+				_ = c.netConn.Close()
+			}
+		}()
+
+		c.pumpPushes()
+	}()
 
 	// A client that connects and then says nothing would otherwise hold its slot, goroutine,
 	// and buffers for the life of the process. The deadline is lifted as soon as it speaks.
@@ -452,7 +482,7 @@ func (c *respConn) deliver(push respPush) {
 	size := push.size()
 	if c.pushBytes.Add(size) > respPushBytes {
 		c.pushBytes.Add(-size)
-		_ = c.netConn.Close()
+		c.dropSlowSubscriber("backlog over the byte budget")
 
 		return
 	}
@@ -463,8 +493,15 @@ func (c *respConn) deliver(push respPush) {
 		c.pushBytes.Add(-size)
 	default:
 		c.pushBytes.Add(-size)
-		_ = c.netConn.Close()
+		c.dropSlowSubscriber("backlog over the message budget")
 	}
+}
+
+// dropSlowSubscriber hangs up on a subscriber that cannot keep up, and says so. The disconnect is
+// deliberate, but without a line naming it an operator sees only a subscriber that vanishes.
+func (c *respConn) dropSlowSubscriber(reason string) {
+	log.Printf("resp: dropping connection %d: %s", c.id, reason)
+	_ = c.netConn.Close()
 }
 
 // reportReadError tells the client about a malformed request before hanging up. A
@@ -511,12 +548,35 @@ func (c *respConn) dispatch(args [][]byte) error {
 		))
 	}
 	if c.inMulti && !respTransactionCommands[name] {
-		c.queued = append(c.queued, args)
+		if !c.queue(args) {
+			return c.writer.WriteError(respErrQueueTooBig)
+		}
 
 		return c.writer.WriteSimple("QUEUED")
 	}
 
 	return cmd.run(c, args)
+}
+
+// queue adds args to the open transaction, refusing it once the queue is over budget. A refused
+// command marks the transaction so that EXEC discards it: running the batch half-formed would
+// apply some of the writes the client asked for and drop the rest without saying which.
+func (c *respConn) queue(args [][]byte) bool {
+	size := respQueueOverhead
+	for _, arg := range args {
+		size += len(arg)
+	}
+
+	if c.queuedBytes+size > respMaxQueuedBytes {
+		c.queueError = true
+
+		return false
+	}
+
+	c.queued = append(c.queued, args)
+	c.queuedBytes += size
+
+	return true
 }
 
 func (c *respConn) wrongArgs(name string) error {

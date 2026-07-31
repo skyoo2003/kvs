@@ -360,11 +360,13 @@ func (c *respConn) cmdHello(args [][]byte) error {
 
 // applyHelloOptions handles the AUTH and SETNAME clauses HELLO accepts, which is how a
 // client authenticates and names itself in the same round trip as the handshake.
-// The name is applied only once the whole option list has parsed, so a HELLO that fails on a
-// later clause does not leave the connection renamed by an earlier one.
+// Nothing is applied until the whole option list has parsed, so a HELLO that fails on a later
+// clause leaves neither the name nor the credential behind. Authenticating mid-parse meant a
+// rejected handshake still answered on a connection it had quietly let in.
 func (c *respConn) applyHelloOptions(args [][]byte) error {
 	name := ""
 	named := false
+	var user, password []byte
 
 	for i := 2; i < len(args); i++ {
 		switch respUpper(args[i]) {
@@ -372,9 +374,7 @@ func (c *respConn) applyHelloOptions(args [][]byte) error {
 			if i+2 >= len(args) {
 				return errRESPSyntax
 			}
-			if err := c.authenticate(args[i+1], args[i+2]); err != nil {
-				return err
-			}
+			user, password = args[i+1], args[i+2]
 			i += 2
 		case respSubSetName:
 			if i+1 >= len(args) {
@@ -387,6 +387,11 @@ func (c *respConn) applyHelloOptions(args [][]byte) error {
 		}
 	}
 
+	if user != nil {
+		if err := c.authenticate(user, password); err != nil {
+			return err
+		}
+	}
 	if named {
 		c.name = name
 	}
@@ -446,14 +451,11 @@ func (c *respConn) cmdSelect(args [][]byte) error {
 func (c *respConn) cmdInfo(_ [][]byte) error {
 	keyCount, expiring := 0, 0
 	if err := c.read(func(tx *kvs.ReadTx) error {
-		// One walk counts both, since the keyspace line reports the live keys and how many of
-		// them carry a TTL. INFO is rare enough not to warrant a maintained counter.
-		for _, key := range tx.Keys() {
-			keyCount++
-			if entry, ok := tx.Get(key); ok && !entry.ExpiresAt.IsZero() {
-				expiring++
-			}
-		}
+		// Both counts come off the expiry index rather than a walk of the keyspace: only a key
+		// carrying an expiry can be dead, so that index holds every candidate. Listing every key
+		// here also allocated a slice of the whole keyspace, which made INFO a lever a client
+		// could pull in a loop to hold the read lock.
+		keyCount, expiring = tx.Len(), tx.Expiring()
 
 		return nil
 	}); err != nil {

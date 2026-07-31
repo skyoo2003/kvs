@@ -198,12 +198,11 @@ func TestRESPKeysAndScan(t *testing.T) {
 		t.Fatalf("SCAN MATCH = %v, want the user keys", got)
 	}
 
-	// A non-zero cursor is the end of the iteration.
-	client.send("SCAN", "17")
-	client.expect("*2" + respCRLF + "$1" + respCRLF + "0" + respCRLF + "*0" + respCRLF)
+	// A cursor the server does not hold is refused, not treated as a finished iteration.
+	client.do("-"+errRESPInvalidCursor.Error()+respCRLF, "SCAN", "17")
 
 	client.do("-"+respErrSyntax+respCRLF, "SCAN", "0", "MATCH")
-	client.do("-ERR invalid cursor"+respCRLF, "SCAN", "abc")
+	client.do("-"+errRESPInvalidCursor.Error()+respCRLF, "SCAN", "abc")
 }
 
 // TestRESPWrongTypeOnNonStringValue uses the Go API to store a value the string commands
@@ -277,17 +276,10 @@ func TestRESPScanCursorsAreNotGuessable(t *testing.T) {
 		t.Fatal("SCAN finished in one page, want an open cursor to interfere with")
 	}
 
-	// Every id a client would plausibly invent has to be unknown, so that presenting one ends
-	// that client's own iteration instead of moving the walk above.
+	// Every id a client would plausibly invent has to be unknown, so that presenting one is
+	// refused rather than moving the walk above.
 	for id := 1; id <= 64; id++ {
-		client.send("SCAN", itoa(id), "COUNT", "5")
-		client.expect("*2" + respCRLF)
-		if got := client.readBulk(); got != "0" {
-			t.Fatalf("SCAN %d cursor = %q, want an unknown cursor to end the iteration", id, got)
-		}
-		if got := client.readStringArray(); len(got) != 0 {
-			t.Fatalf("SCAN %d = %v, want no keys", id, got)
-		}
+		client.do("-"+errRESPInvalidCursor.Error()+respCRLF, "SCAN", itoa(id), "COUNT", "5")
 	}
 
 	// The original walk still reaches every key.
@@ -464,13 +456,54 @@ func TestRESPScanKeepsSeenKeysWhenEarlierOnesVanish(t *testing.T) {
 	}
 }
 
-// TestRESPScanUnknownCursorEndsIteration keeps a reconnecting client from getting an error for
-// a cursor this connection never issued.
-func TestRESPScanUnknownCursorEndsIteration(t *testing.T) {
+// TestRESPScanRejectsUnknownCursor makes a cursor the server does not hold an error rather than
+// a finished page.
+//
+// This used to answer "0" with no keys, so that a client reconnecting with a cursor its own
+// socket never issued was not handed an error. Cursors moved to the server precisely so that a
+// pooled client's continuation is found, which leaves eviction, invention, and a restart as the
+// only ways to present an unknown one. "0" with no keys is the protocol's signal that the walk
+// finished, so answering it there told those clients they had enumerated a keyspace they had
+// barely started.
+func TestRESPScanRejectsUnknownCursor(t *testing.T) {
 	client := newRESPClient(t, kvs.NewStore())
 
 	client.do("+OK"+respCRLF, "SET", "k", "v")
-	client.do("*2"+respCRLF+"$1"+respCRLF+"0"+respCRLF+"*0"+respCRLF, "SCAN", "9999")
+	client.do("-"+errRESPInvalidCursor.Error()+respCRLF, "SCAN", "9999")
+	client.do("-"+errRESPInvalidCursor.Error()+respCRLF, "HSCAN", "h", "9999")
+}
+
+// TestRESPScanRejectsEvictedCursor is the case that makes a silently finished page cost a client
+// real keys: the table evicts by map order once it is full, so unrelated walks can drop a live
+// iteration's entry.
+func TestRESPScanRejectsEvictedCursor(t *testing.T) {
+	store := kvs.NewStore()
+	const keys = 3000
+	for i := range keys {
+		if err := store.Put("key:"+itoa(i), "v"); err != nil {
+			t.Fatalf("Put() error = %v", err)
+		}
+	}
+
+	client := newRESPClient(t, store)
+
+	client.send("SCAN", "0", "COUNT", "10")
+	client.expect("*2" + respCRLF)
+	cursor := client.readBulk()
+	if seen := client.readStringArray(); len(seen) != 10 {
+		t.Fatalf("first page = %d keys, want 10", len(seen))
+	}
+
+	// Open far more iterations than the table holds. Each one past the cap evicts an arbitrary
+	// entry, so after this many the cursor above is gone with near certainty.
+	for range 20 * respScanCursorLimit {
+		client.send("SCAN", "0", "COUNT", "10")
+		client.expect("*2" + respCRLF)
+		client.readBulk()
+		client.readStringArray()
+	}
+
+	client.do("-"+errRESPInvalidCursor.Error()+respCRLF, "SCAN", cursor, "COUNT", "10")
 }
 
 // TestRespGlobMatchStaysLinear guards the matcher against exponential backtracking. Recursing

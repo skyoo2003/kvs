@@ -68,7 +68,10 @@ func (r *respCursors) remember(cursor uint64, resumeAfter string) uint64 {
 	}
 
 	if cursor == 0 {
-		// Abandoned iterations are never finished, so cap how many may pile up.
+		// Abandoned iterations are never finished, so cap how many may pile up. Eviction picks
+		// by map order and cannot tell an abandoned handle from a live one, which is why
+		// presenting a forgotten cursor is an error rather than a finished page: the client
+		// retries instead of believing its walk covered the keyspace.
 		for id := range r.at {
 			if len(r.at) < respScanCursorLimit {
 				break
@@ -466,7 +469,7 @@ func (c *respConn) cmdScan(args [][]byte) error {
 
 	after, resumed, known := c.scanResume(cursor)
 	if !known {
-		return c.writeScanPage(cursor, respScanPage{done: true})
+		return c.writeFailure(errRESPInvalidCursor)
 	}
 
 	var page respScanPage
@@ -620,7 +623,7 @@ func (c *respConn) runCollectionScan(args [][]byte, load respCollectionLoader) e
 
 	after, resumed, known := c.scanResume(cursor)
 	if !known {
-		return c.writeScanPage(cursor, respScanPage{done: true})
+		return c.writeFailure(errRESPInvalidCursor)
 	}
 
 	var page respScanPage
