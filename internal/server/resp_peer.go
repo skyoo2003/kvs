@@ -26,17 +26,25 @@ func newPeerConn(conn net.Conn) *peerConn {
 }
 
 // send writes one command as a RESP array of bulk strings.
-func (p *peerConn) send(args ...string) error {
-	if err := p.writer.WriteArrayHeader(len(args)); err != nil {
-		return fmt.Errorf("send %s: %w", args[0], err)
+//
+// The command name is a parameter of its own rather than the first of args, so that a failure can
+// name the command with no way to reach an argument: one of the arguments is a password, and the
+// error this returns is logged. Holding both in one slice made that safe only for as long as
+// every caller happened to put something harmless first.
+func (p *peerConn) send(cmd string, args ...string) error {
+	if err := p.writer.WriteArrayHeader(len(args) + 1); err != nil {
+		return fmt.Errorf("send %s: %w", cmd, err)
+	}
+	if err := p.writer.WriteBulkString(cmd); err != nil {
+		return fmt.Errorf("send %s: %w", cmd, err)
 	}
 	for _, arg := range args {
 		if err := p.writer.WriteBulkString(arg); err != nil {
-			return fmt.Errorf("send %s: %w", args[0], err)
+			return fmt.Errorf("send %s: %w", cmd, err)
 		}
 	}
 	if err := p.writer.Flush(); err != nil {
-		return fmt.Errorf("send %s: %w", args[0], err)
+		return fmt.Errorf("send %s: %w", cmd, err)
 	}
 
 	return nil
