@@ -194,13 +194,20 @@ offers `SCRIPT KILL`, which works only because it can still serve a second conne
 the first sits in the interpreter. A stopped script keeps whatever it had already written, the
 way Redis keeps the writes a script made before it failed.
 
-**A script cannot reach outside the process.** Only the base, `table`, `string`, and `math`
-libraries are open, and `dofile`, `loadfile`, `print`, and `require` are removed along with
-them; `os`, `io`, `debug`, and `package` are never opened. `cjson`, `cmsgpack`, `bit`, and
-`struct` are absent as well, so a script that encodes JSON has to be rewritten or the work
-moved to the client. `redis.call` also refuses the commands that make no sense inside a
-script: the transaction and subscribe families, the scripting commands themselves, and the
-session commands.
+**A script cannot reach outside the process.** Only the base, `table`, `string`, `math`, and
+`cjson` libraries are open, and `dofile`, `loadfile`, `print`, and `require` are removed along
+with them; `os`, `io`, `debug`, and `package` are never opened. `cmsgpack`, `bit`, and `struct`
+are absent, so a script needing one of those has to be rewritten or the work moved to the
+client. `redis.call` also refuses the commands that make no sense inside a script: the
+transaction and subscribe families, the scripting commands themselves, and the session
+commands.
+
+`cjson.encode` and `cjson.decode` follow cjson's rules: a table whose keys are exactly 1 to n
+encodes as an array and anything else, an empty table included, as an object; a JSON null
+decodes to `cjson.null` rather than to nil, so it neither ends the array it sits in nor drops
+the key it is under. A value with no JSON spelling, a function or a table holding itself, is an
+error rather than a wrong answer. A string that is not valid UTF-8 is encoded with the
+replacement character, where Redis passes the bytes through unchanged.
 
 The script cache holds up to **16 MiB**. Past that `EVAL` still runs the script and only skips
 caching it, which costs the client the `EVALSHA` shortcut rather than the command, while
@@ -214,8 +221,8 @@ notifications, streams, blocking commands (`BLPOP` and friends), ACLs beyond a s
 password, RESP3 push and attribute types, `MONITOR`, `OBJECT`, bit operations, `GEO`, and
 HyperLogLog.
 
-`SCRIPT KILL` and the `_RO` script variants are absent too, as are the `cjson` and `cmsgpack`
-libraries inside a script.
+`SCRIPT KILL` and the `_RO` script variants are absent too, as is the `cmsgpack` library inside
+a script.
 
 `ZADD` with `INCR` and the `NX`, `XX`, `GT`, and `LT` options on `EXPIRE` are also absent, as is
 `LIMIT` on `ZRANGEBYSCORE` and `ZREVRANGEBYSCORE`. `ZRANGE` takes positions only, so its

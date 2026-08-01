@@ -79,6 +79,62 @@ func TestRESPEvalCallsCommands(t *testing.T) {
 		"redis.call('RPUSH','list','a','b') return redis.call('LRANGE','list',0,-1)[2]", "0")
 }
 
+// TestRESPEvalEncodesJSON covers cjson, which is how a script reads a structured value it
+// stored under one key: without it every such script has to parse by hand or move the work out.
+func TestRESPEvalEncodesJSON(t *testing.T) {
+	client := newRESPClient(t, kvs.NewStore())
+
+	tests := []struct {
+		name   string
+		script string
+		want   string
+	}{
+		{name: "an object decodes by key", script: "return cjson.decode('{\"a\":\"b\"}').a", want: "$1" + respCRLF + "b"},
+		{name: "an array decodes from one", script: "return cjson.decode('[7,8]')[2]", want: ":8"},
+		{name: "a nested value decodes", script: "return cjson.decode('{\"x\":{\"y\":[1,2]}}').x.y[2]", want: ":2"},
+		{name: "an array encodes", script: "return cjson.encode({1,2})", want: "$5" + respCRLF + "[1,2]"},
+		{name: "a keyed table encodes as an object", script: "return cjson.encode({a=1})", want: "$7" + respCRLF + `{"a":1}`},
+		{name: "an empty table encodes as an object", script: "return cjson.encode({})", want: "$2" + respCRLF + "{}"},
+		{
+			name:   "a round trip holds",
+			script: "return cjson.encode(cjson.decode('[1,\"a\"]'))",
+			want:   "$7" + respCRLF + `[1,"a"]`,
+		},
+		// A null is not nil, so it neither ends the array it sits in nor drops the key it is under.
+		{name: "a null keeps its place", script: "return #cjson.decode('[1,null,3]')", want: ":3"},
+		{
+			name:   "a null survives a round trip",
+			script: "return cjson.encode(cjson.decode('[null]'))",
+			want:   "$6" + respCRLF + "[null]",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client.t = t
+			client.do(tt.want+respCRLF, respCmdEval, tt.script, "0")
+		})
+	}
+
+	client.t = t
+
+	// The value a script reads is the one a client wrote, which is the whole point of having it.
+	client.do("+OK"+respCRLF, "SET", "doc", `{"n":41}`)
+	client.do(":42"+respCRLF, respCmdEval, "return cjson.decode(redis.call('GET',KEYS[1])).n + 1", "1", "doc")
+
+	// Bad input and a value with no JSON spelling are script errors, not silent wrong answers.
+	for name, script := range map[string]string{
+		"invalid json":     "return cjson.decode('{oops')",
+		"a function":       "return cjson.encode(cjson.encode)",
+		"a table cycle":    "local t = {} t.self = t return cjson.encode(t)",
+		"a missing string": "return cjson.decode()",
+	} {
+		if line := client.readLineFor(respCmdEval, script, "0"); !strings.HasPrefix(line, "-ERR ") {
+			t.Fatalf("EVAL with %s = %q, want an error reply", name, line)
+		}
+	}
+}
+
 func TestRESPEvalRunsAsOneStep(t *testing.T) {
 	client := newRESPClient(t, kvs.NewStore())
 

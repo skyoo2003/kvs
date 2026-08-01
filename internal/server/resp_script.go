@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha1" //nolint:gosec // SHA1 names a cache entry here; the EVALSHA protocol specifies it.
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -322,6 +323,9 @@ func (c *respConn) openScriptAPI(state *lua.LState, keys, argv [][]byte) {
 
 	state.SetGlobal("KEYS", respLuaStrings(state, keys))
 	state.SetGlobal("ARGV", respLuaStrings(state, argv))
+	// cjson stays in reach of the process only, so opening it costs the sandbox nothing, and
+	// without it every script that stores a structured value has to hand-roll a parser.
+	state.SetGlobal("cjson", respCJSONTable(state))
 	state.SetGlobal("redis", c.newRedisTable(state))
 	// Valkey renamed the table and kept the old name working, so both names reach it.
 	state.SetGlobal("server", state.GetGlobal("redis"))
@@ -582,6 +586,147 @@ func respLuaSHA1Hex(state *lua.LState) int {
 	state.Push(lua.LString(respScriptHash(state.CheckString(1))))
 
 	return 1
+}
+
+// respLuaJSONNull is what a JSON null decodes to, as in cjson: a value that is not nil, so a
+// null inside an array does not end the array where it sits. One shared instance is enough,
+// since it is only ever compared against itself and no script can reach inside it.
+var respLuaJSONNull = &lua.LUserData{Value: "cjson.null"}
+
+// respCJSONTable builds the cjson library. Scripts that keep a structured value under one key
+// are the common use for EVAL, and encoding it by hand in Lua is what they would do instead.
+func respCJSONTable(state *lua.LState) *lua.LTable {
+	table := state.NewTable()
+	state.SetFuncs(table, map[string]lua.LGFunction{
+		"encode": respLuaJSONEncode,
+		"decode": respLuaJSONDecode,
+	})
+	table.RawSetString("null", respLuaJSONNull)
+
+	return table
+}
+
+func respLuaJSONDecode(state *lua.LState) int {
+	var decoded any
+	if err := json.Unmarshal([]byte(state.CheckString(1)), &decoded); err != nil {
+		state.RaiseError("cjson: %s", err.Error())
+	}
+	state.Push(respJSONToLua(state, decoded))
+
+	return 1
+}
+
+func respLuaJSONEncode(state *lua.LState) int {
+	value, err := respLuaToJSON(state.CheckAny(1), 0)
+	if err == nil {
+		var encoded []byte
+		// ponytail: encoding/json replaces a byte sequence that is not UTF-8 with U+FFFD, where
+		// cjson passes it through. A script encoding a binary value gets the replacement; hand the
+		// value to the client and encode it there if that matters.
+		if encoded, err = json.Marshal(value); err == nil {
+			state.Push(lua.LString(encoded))
+
+			return 1
+		}
+	}
+	state.RaiseError("cjson: %s", err.Error())
+
+	return 0
+}
+
+// respJSONToLua converts what encoding/json decoded into Lua: an object into a table keyed by
+// string, an array into one indexed from 1, the way cjson does.
+func respJSONToLua(state *lua.LState, value any) lua.LValue {
+	switch typed := value.(type) {
+	case bool:
+		return lua.LBool(typed)
+	case float64:
+		return lua.LNumber(typed)
+	case string:
+		return lua.LString(typed)
+	case []any:
+		table := state.NewTable()
+		for _, item := range typed {
+			table.Append(respJSONToLua(state, item))
+		}
+
+		return table
+	case map[string]any:
+		table := state.NewTable()
+		for key, item := range typed {
+			table.RawSetString(key, respJSONToLua(state, item))
+		}
+
+		return table
+	default:
+		// A JSON null, which is the only other thing encoding/json produces.
+		return respLuaJSONNull
+	}
+}
+
+// respLuaToJSON converts a Lua value into what encoding/json can marshal. The depth bound is
+// what stops a table holding itself, which has no JSON spelling and would otherwise recurse
+// until the stack gave out.
+func respLuaToJSON(value lua.LValue, depth int) (any, error) {
+	if depth > respLuaMaxDepth {
+		return nil, errors.New("cannot serialize, excessive nesting")
+	}
+
+	switch typed := value.(type) {
+	case *lua.LNilType:
+		return nil, nil
+	case lua.LBool:
+		return bool(typed), nil
+	case lua.LNumber:
+		return float64(typed), nil
+	case lua.LString:
+		return string(typed), nil
+	case *lua.LTable:
+		return respLuaTableToJSON(typed, depth)
+	case *lua.LUserData:
+		if typed == respLuaJSONNull {
+			return nil, nil
+		}
+	}
+
+	return nil, fmt.Errorf("cannot serialize %s: type not supported", value.Type())
+}
+
+// respLuaTableToJSON decides whether a table is an array or an object. Lua spells both the same
+// way, so the rule cjson uses stands here: a table whose keys are exactly 1..n is an array, and
+// anything else, an empty table included, is an object.
+func respLuaTableToJSON(table *lua.LTable, depth int) (any, error) {
+	length, keys := table.Len(), 0
+	table.ForEach(func(lua.LValue, lua.LValue) { keys++ })
+
+	if length == keys && keys > 0 {
+		items := make([]any, 0, length)
+		for at := 1; at <= length; at++ {
+			item, err := respLuaToJSON(table.RawGetInt(at), depth+1)
+			if err != nil {
+				return nil, err
+			}
+			items = append(items, item)
+		}
+
+		return items, nil
+	}
+
+	var err error
+
+	object := make(map[string]any, keys)
+	table.ForEach(func(key, item lua.LValue) {
+		if err != nil {
+			return
+		}
+
+		var converted any
+		if converted, err = respLuaToJSON(item, depth+1); err == nil {
+			object[key.String()] = converted
+		}
+	})
+
+	return object, err
 }
 
 // respScriptHash is the digest a script is cached and looked up by.
