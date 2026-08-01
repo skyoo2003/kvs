@@ -1,0 +1,5 @@
+kind: Changed
+body: "server.RunListeners now takes the store before a Listeners struct instead of positional net.Listener arguments"
+time: 2026-07-30T21:00:01.000000+09:00
+custom:
+    Issue: "232"

@@ -9,6 +9,7 @@ A key-value store as a distributed server or a Go module.
 - **In-memory key-value store** — thread-safe `Store` with `Get`, `Put`, `Delete`
 - **HTTP server** — JSON REST API at `/v1/keys/{key}` with health check at `/healthz`
 - **gRPC server** — protobuf-based KV service with gRPC health checking
+- **Redis/Valkey API** — RESP2 server on `127.0.0.1:6379`, so `redis-cli` and `go-redis` connect directly
 - **Cobra/Viper CLI** — `serve` command with configurable listen addresses
 - **Library** — import `github.com/skyoo2003/kvs` directly in Go programs
 - **Docker** — container images published to `ghcr.io/skyoo2003/kvs`
@@ -24,7 +25,8 @@ go install github.com/skyoo2003/kvs/cmd/kvs@latest
 ### Docker
 
 ```sh
-docker run -p 3456:3456 -p 3457:3457 ghcr.io/skyoo2003/kvs:latest-alpine
+docker run -p 3456:3456 -p 3457:3457 -p 6379:6379 \
+  -e KVS_RESP_ADDR=:6379 ghcr.io/skyoo2003/kvs:latest-alpine
 ```
 
 ## Usage
@@ -35,6 +37,8 @@ docker run -p 3456:3456 -p 3457:3457 ghcr.io/skyoo2003/kvs:latest-alpine
 $ kvs serve                          # start HTTP (:3456) and gRPC (:3457) servers
 $ kvs serve --http-addr :8080        # custom HTTP address
 $ kvs serve --grpc-addr :50051       # custom gRPC address
+$ kvs serve --resp-addr :6379        # expose RESP beyond loopback
+$ kvs serve --resp-addr none         # disable the RESP listener
 $ kvs --config config.yaml serve     # load addresses from Viper config
 $ kvs version                        # print version
 ```
@@ -70,6 +74,23 @@ curl http://localhost:3456/v1/keys/mykey
 # Delete
 curl -X DELETE http://localhost:3456/v1/keys/mykey
 ```
+
+### Redis/Valkey API
+
+All three protocols share one keyspace, so any client can read what another wrote.
+
+```sh
+$ redis-cli -p 6379 set mykey hello
+OK
+$ redis-cli -p 6379 get mykey
+"hello"
+$ curl http://localhost:3456/v1/keys/mykey
+{"key":"mykey","value":"hello"}
+```
+
+The RESP listener binds `127.0.0.1:6379` by default and takes a password from
+`KVS_RESP_PASSWORD`. See the [Redis API docs](https://skyoo2003.github.io/kvs/docs/redis-api/)
+for the supported command list.
 
 ## Documentation
 

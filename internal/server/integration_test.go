@@ -40,7 +40,7 @@ func TestRunListenersSharesStoreAcrossHTTPAndGRPC(t *testing.T) {
 
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- RunListeners(ctx, httpListener, grpcListener, kvs.NewStore())
+		errCh <- RunListeners(ctx, kvs.NewStore(), Listeners{HTTP: httpListener, GRPC: grpcListener})
 	}()
 
 	t.Cleanup(func() {
@@ -113,6 +113,52 @@ func TestRunClosesHTTPListenerWhenGRPCListenFails(t *testing.T) {
 		t.Fatalf("net.Listen(reopen http) error = %v", err)
 	}
 	_ = reopenedHTTPListener.Close()
+}
+
+// TestRunToleratesTheDefaultRESPPortBeingTaken covers the upgrade case that took the whole
+// process down: on a machine already running Redis on 6379, binding an address nobody had
+// chosen failed and the HTTP and gRPC servers never started either.
+func TestRunToleratesTheDefaultRESPPortBeingTaken(t *testing.T) {
+	// Holding the port ourselves reproduces it. If something else already holds it, the case
+	// under test is present anyway and Run has to survive it just the same.
+	if blocker, err := newTestListenerAt(t, DefaultConfig().RESPAddr); err == nil {
+		defer func() {
+			_ = blocker.Close()
+		}()
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cfg := Config{HTTPAddr: "127.0.0.1:0", GRPCAddr: "127.0.0.1:0", RESPAddr: DefaultConfig().RESPAddr}
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- Run(ctx, cfg, kvs.NewStore())
+	}()
+
+	select {
+	case err := <-errCh:
+		cancel()
+		t.Fatalf("Run() error = %v, want the unchosen RESP address to be tolerated", err)
+	case <-time.After(200 * time.Millisecond):
+	}
+
+	cancel()
+	if err := <-errCh; err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	// An address the operator did name is theirs to get wrong, and still fatal.
+	taken, err := newTestListener(t)
+	if err != nil {
+		t.Fatalf("net.Listen(taken) error = %v", err)
+	}
+	defer func() {
+		_ = taken.Close()
+	}()
+
+	cfg.RESPAddr = taken.Addr().String()
+	if err := Run(context.Background(), cfg, kvs.NewStore()); err == nil {
+		t.Fatal("Run() error = nil, want a chosen RESP address to fail")
+	}
 }
 
 func newTestListener(t *testing.T) (net.Listener, error) {
