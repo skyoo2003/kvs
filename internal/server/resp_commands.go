@@ -13,9 +13,15 @@ import (
 )
 
 const (
-	respCRLF           = "\r\n"
+	respCRLF = "\r\n"
+	// respModeStandalone is reported even by a clustered node, and stays true: the mode names the
+	// protocol a client should speak, and kvs speaks the standalone one. Redis Cluster's mode
+	// promises hash slots and a CLUSTER command family that kvs does not have, so claiming it
+	// would send cluster-aware clients looking for both.
 	respModeStandalone = "standalone"
 	respRoleMaster     = "master"
+	// respRoleSlave is Redis's spelling, kept because clients parse the word rather than read it.
+	respRoleSlave = "slave"
 
 	respErrNoProto = "NOPROTO unsupported protocol version"
 
@@ -92,7 +98,7 @@ func respCommandFor(name string) (respCommand, bool) {
 			respConnectionCommands(), respTransactionTable(), respPubSubCommands(),
 			respStringCommands(), respKeyspaceCommands(), respHashCommands(),
 			respListCommands(), respSetCommands(), respZSetCommands(),
-			respScriptCommands(),
+			respScriptCommands(), respClusterCommands(),
 		} {
 			maps.Copy(respCommands, group)
 		}
@@ -348,7 +354,7 @@ func (c *respConn) cmdHello(args [][]byte) error {
 		"proto", "2",
 		"id", strconv.FormatInt(c.id, 10),
 		"mode", respModeStandalone,
-		"role", respRoleMaster,
+		"role", c.server.replicationRole(),
 	}
 	for _, field := range fields {
 		if err := c.writer.WriteBulkString(field); err != nil {
@@ -478,12 +484,17 @@ func (c *respConn) cmdInfo(_ [][]byte) error {
 		"# Clients",
 		"connected_clients:" + strconv.Itoa(c.server.connCount()),
 		"",
-		"# Replication",
-		"role:" + respRoleMaster,
-		"connected_slaves:0",
+	}
+	lines = append(lines, c.server.replicationInfo()...)
+	lines = append(lines,
+		"",
+		"# Cluster",
+		// Always zero: this names Redis Cluster, which kvs is not, whatever --raft-addr is doing.
+		// It is the field a client reads to learn there are no hash slots to ask about.
+		"cluster_enabled:0",
 		"",
 		"# Keyspace",
-	}
+	)
 	if keyCount > 0 {
 		lines = append(lines, fmt.Sprintf("db0:keys=%d,expires=%d,avg_ttl=0", keyCount, expiring))
 	}

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/skyoo2003/kvs"
+	"github.com/skyoo2003/kvs/internal/cluster"
 )
 
 // Listeners carries the bound listeners RunListeners serves. A nil field disables that
@@ -20,7 +21,42 @@ type Listeners struct {
 	RESP net.Listener
 }
 
+// OpenStore builds the store the three protocols share. A DataDir turns on the append log, so
+// the keyspace survives a restart; without one the store is in memory, which is what kvs did
+// before and still does unless asked otherwise.
+//
+// The caller closes it.
+//
+//nolint:gocritic // Settings read once at startup; a pointer would only invite mutation.
+func OpenStore(cfg Config) (*kvs.Store, error) {
+	store := kvs.NewStore()
+	store.SetCodec(respCodec{})
+
+	// In a cluster the Raft log is the durable record, and a second log of the same changes
+	// would only be a second thing to keep in step.
+	if cfg.DataDir != "" && cfg.RaftAddr == "" {
+		opened, err := kvs.Open(cfg.DataDir, respCodec{})
+		if err != nil {
+			return nil, fmt.Errorf("open data dir %s: %w", cfg.DataDir, err)
+		}
+		store = opened
+	}
+
+	return store, nil
+}
+
+//nolint:gocritic // Settings read once at startup; a pointer would only invite mutation.
 func Run(ctx context.Context, cfg Config, store *kvs.Store) error {
+	// The cluster comes up before the listeners, so a node is already voting by the time it
+	// answers anyone.
+	node, clusterErr := startCluster(ctx, cfg, store)
+	if clusterErr != nil {
+		return clusterErr
+	}
+	if node != nil {
+		defer func() { _ = node.Close() }()
+	}
+
 	var lc net.ListenConfig
 	var listeners Listeners
 
@@ -60,14 +96,60 @@ func Run(ctx context.Context, cfg Config, store *kvs.Store) error {
 		return err
 	}
 
-	return runListeners(ctx, store, listeners, cfg.RESPPassword)
+	return runListeners(ctx, store, listeners, cfg.RESPPassword, membership(node))
 }
 
 func RunListeners(ctx context.Context, store *kvs.Store, listeners Listeners) error {
-	return runListeners(ctx, store, listeners, "")
+	return runListeners(ctx, store, listeners, "", nil)
 }
 
-func runListeners(ctx context.Context, store *kvs.Store, listeners Listeners, respPassword string) error {
+// startCluster stands this node up as a cluster member, or reports that there is no cluster to
+// join. A RaftAddr is what asks for one.
+//
+//nolint:gocritic // Settings read once at startup; a pointer would only invite mutation.
+func startCluster(ctx context.Context, cfg Config, store *kvs.Store) (*cluster.Node, error) {
+	if cfg.RaftAddr == "" {
+		return nil, nil
+	}
+	if cfg.DataDir == "" {
+		return nil, errors.New("a cluster needs --data-dir: the raft log has to live somewhere")
+	}
+	// Raft identifies nodes by this, and clients are sent to it by name, so it cannot be blank.
+	if cfg.NodeID == "" {
+		return nil, errors.New("a cluster needs --node-id when there is no --resp-addr to borrow")
+	}
+
+	node, err := cluster.Start(cluster.Config{
+		NodeID:   cfg.NodeID,
+		RaftAddr: cfg.RaftAddr,
+		DataDir:  cfg.DataDir,
+		// Exactly one node starts the cluster, and it is the one with nobody to join.
+		Bootstrap: cfg.JoinAddr == "",
+	}, store)
+	if err != nil {
+		return nil, err
+	}
+
+	if cfg.JoinAddr != "" {
+		go joinCluster(ctx, cfg.JoinAddr, cfg.RESPPassword, cfg.NodeID, cfg.RaftAddr)
+	}
+
+	return node, nil
+}
+
+// membership converts a possibly absent node into an interface that is genuinely nil when there
+// is none. Assigning a nil *cluster.Node straight into the interface would not be.
+func membership(node *cluster.Node) clusterNode {
+	if node == nil {
+		return nil
+	}
+
+	return node
+}
+
+func runListeners(
+	ctx context.Context, store *kvs.Store, listeners Listeners, respPassword string, node clusterNode,
+) error {
 	if store == nil {
 		store = kvs.NewStore()
 	}
@@ -78,6 +160,9 @@ func runListeners(ctx context.Context, store *kvs.Store, listeners Listeners, re
 	}
 	grpcServer := NewGRPCServer(store)
 	respServer := NewRESPServer(store, respPassword)
+	if node != nil {
+		respServer.SetCluster(node)
+	}
 	errCh := make(chan error, 3)
 
 	if listeners.HTTP != nil {

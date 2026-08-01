@@ -1,6 +1,6 @@
 ---
 title: "Release Process"
-weight: 4
+weight: 7
 ---
 
 The project uses [Changie](https://github.com/miniscruff/changie) for changelog management and [GoReleaser](https://goreleaser.com/) for automated releases.

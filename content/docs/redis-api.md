@@ -1,6 +1,6 @@
 ---
 title: "Redis API"
-weight: 40
+weight: 4
 ---
 
 # Redis and Valkey compatible API
@@ -147,6 +147,13 @@ client library keys its fallback on: it sends the digest first and resends the s
 after seeing that code. `EVAL` caches on the way through, so that fallback needs no
 `SCRIPT LOAD` of its own.
 
+### Cluster
+
+`KVS.JOIN <node-id> <raft-addr>` asks the node it is sent to, which has to be the leader, to
+admit another node as a voting member. `kvs serve --join` sends it for you; it is on the RESP
+listener rather than a port of its own so that joining authenticates the same way everything
+else does.
+
 ## Behaviour worth knowing
 
 These are the places kvs answers correctly but not identically to Redis.
@@ -184,6 +191,31 @@ keyspace with no expiries pays nothing and an abandoned key does not linger.
 memory budget, and a subscriber that exceeds either is disconnected rather than slowing the
 publisher down, which is how Redis bounds a client output buffer.
 
+**Publish/subscribe never leaves the node it happened on.** Channels are not keyspace, so a
+cluster does not replicate them: a `PUBLISH` on one node returns `0` while a subscriber sits on
+another. Point publishers and subscribers at the same node.
+
+**In a cluster, only the leader takes writes.** A write sent anywhere else is answered
+`MOVED 0 <leader>` — Redis Cluster's wording, with slot `0` always, because kvs does not shard —
+so a client that already follows redirections needs no changes. During an election nobody is the
+leader yet and the reply is `CLUSTERDOWN` instead. Reads are answered by any node and may be
+behind the leader.
+
+**`INFO` says which node you reached.** In a cluster the leader reports `role:master` and counts
+the others as `connected_slaves`; a follower reports `role:slave` and names the leader in
+`master_host` and `master_port`, so a client can find the node that takes writes without sending
+one first. Outside a cluster it is `role:master` with no followers, as before. `HELLO` carries the
+same role.
+
+`master_link_status` is not reported: kvs does not track how far behind a follower is, and a field
+invented to look complete would be worse than its absence.
+
+**`redis_mode` stays `standalone`, and `cluster_enabled` is `0`,** on a clustered node too. Those
+fields name the *protocol* a client should speak, and kvs speaks the standalone one — Redis
+Cluster's mode promises hash slots and a `CLUSTER` command family that kvs does not have. A node
+still answers `MOVED`, which a standalone Redis never does; the redirect is borrowed wording, not
+a claim to be Redis Cluster.
+
 **`CONFIG SET` is refused** rather than accepted and ignored. `CONFIG GET` answers for the
 parameters clients probe on connect.
 
@@ -216,10 +248,18 @@ releases the budget.
 
 ## Not implemented
 
-Replication, cluster mode, RDB and AOF persistence, functions (`FCALL`), keyspace
-notifications, streams, blocking commands (`BLPOP` and friends), ACLs beyond a single
-password, RESP3 push and attribute types, `MONITOR`, `OBJECT`, bit operations, `GEO`, and
-HyperLogLog.
+Functions (`FCALL`), keyspace notifications, streams, blocking commands (`BLPOP` and friends),
+ACLs beyond a single password, RESP3 push and attribute types, `MONITOR`, `OBJECT`, bit
+operations, `GEO`, and HyperLogLog.
+
+**Redis's replication and cluster commands** are absent — `REPLICAOF`, `SLAVEOF`, `WAIT`, and
+the `CLUSTER` family. kvs does replicate and does cluster, through Raft and its own `KVS.JOIN`,
+but none of it is driven by Redis's commands, and it does not shard, so there are no slots to
+report. See [Durability and Clustering](../clustering/).
+
+**RDB and AOF files** are absent as formats. `--data-dir` keeps an append log of its own that
+serves the same purpose, and there is no `SAVE`, `BGSAVE`, or `BGREWRITEAOF` to drive it: the log
+is written as part of each write and compacted at startup.
 
 `SCRIPT KILL` and the `_RO` script variants are absent too, as is the `cmsgpack` library inside
 a script.
