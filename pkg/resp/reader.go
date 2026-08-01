@@ -149,6 +149,116 @@ func (r *Reader) readBulk() ([]byte, error) {
 	return payload[:length], nil
 }
 
+// Status is a simple string reply such as +OK. It is a type of its own so that a caller
+// converting replies back into values can tell one from a bulk string carrying the same bytes.
+type Status string
+
+// Error is an error reply, reported as a value rather than a Go error: whether a failed
+// command is the caller's own failure is the caller's decision, not the parser's.
+type Error string
+
+// replyMaxDepth bounds how deeply arrays may nest. Replies kvs writes nest two levels at most,
+// so it only matters elsewhere, where a stream of "*1" lines would recurse until the stack goes.
+const replyMaxDepth = 32
+
+// ParseReply reads one reply off the front of encoded and returns it with whatever follows, so
+// a caller holding a batch can keep going. The value is one of Status, Error, int64, []byte for
+// a bulk string, or []any for an array; a null of either parses to a nil slice of its own type,
+// which keeps a missing value distinguishable from an empty one.
+func ParseReply(encoded []byte) (value any, rest []byte, err error) {
+	return parseReply(encoded, 0)
+}
+
+func parseReply(encoded []byte, depth int) (value any, rest []byte, err error) {
+	if depth > replyMaxDepth {
+		return nil, nil, fmt.Errorf("%w: reply nested too deeply", ErrProtocol)
+	}
+
+	line, rest, err := cutLine(encoded)
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(line) == 0 {
+		return nil, nil, fmt.Errorf("%w: empty reply", ErrProtocol)
+	}
+
+	body := line[1:]
+	switch line[0] {
+	case '+':
+		return Status(body), rest, nil
+	case '-':
+		return Error(body), rest, nil
+	case ':':
+		number, convErr := strconv.ParseInt(string(body), 10, 64)
+		if convErr != nil {
+			return nil, nil, fmt.Errorf("%w: invalid integer %q", ErrProtocol, body)
+		}
+
+		return number, rest, nil
+	case '$':
+		return parseBulkReply(body, rest)
+	case '*':
+		return parseArrayReply(body, rest, depth)
+	default:
+		return nil, nil, fmt.Errorf("%w: unknown reply type %q", ErrProtocol, line[0])
+	}
+}
+
+func parseBulkReply(header, rest []byte) (value any, remaining []byte, err error) {
+	length, err := parseCount(header)
+	if err != nil {
+		return nil, nil, err
+	}
+	if length < 0 {
+		// A nil slice rather than an empty one: only this branch means the value was not there.
+		return []byte(nil), rest, nil
+	}
+	// Checking the announced length before adding keeps the sum below in range.
+	if length > MaxBulkLength || length+len(crlf) > len(rest) {
+		return nil, nil, fmt.Errorf("%w: truncated bulk string", ErrProtocol)
+	}
+	if string(rest[length:length+len(crlf)]) != crlf {
+		return nil, nil, fmt.Errorf("%w: unterminated bulk string", ErrProtocol)
+	}
+
+	return rest[:length], rest[length+len(crlf):], nil
+}
+
+func parseArrayReply(header, rest []byte, depth int) (value any, remaining []byte, err error) {
+	count, err := parseCount(header)
+	if err != nil {
+		return nil, nil, err
+	}
+	if count < 0 {
+		return []any(nil), rest, nil
+	}
+	if count > MaxArrayLength {
+		return nil, nil, fmt.Errorf("%w: invalid multibulk length", ErrProtocol)
+	}
+
+	items := make([]any, 0, min(count, argPrealloc))
+	for range count {
+		var item any
+		if item, rest, err = parseReply(rest, depth+1); err != nil {
+			return nil, nil, err
+		}
+
+		items = append(items, item)
+	}
+
+	return items, rest, nil
+}
+
+// cutLine splits off the next CRLF terminated line, without its terminator.
+func cutLine(encoded []byte) (line, rest []byte, err error) {
+	at := bytes.Index(encoded, []byte(crlf))
+	if at < 0 {
+		return nil, nil, fmt.Errorf("%w: unterminated reply line", ErrProtocol)
+	}
+
+	return encoded[:at], encoded[at+len(crlf):], nil
+}
+
 func parseCount(b []byte) (int, error) {
 	n, err := strconv.Atoi(string(b))
 	if err != nil {

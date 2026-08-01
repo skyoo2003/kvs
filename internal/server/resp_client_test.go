@@ -56,6 +56,38 @@ func TestGoRedisNegotiatesRESP2(t *testing.T) {
 	}
 }
 
+// TestGoRedisScriptFallsBackFromEvalSha is the shape scripting was added for: a client library
+// sends EVALSHA first and the script itself only after a NOSCRIPT reply, so a server answering
+// anything else leaves it reporting a failed EVAL for a call that never carried the script.
+func TestGoRedisScriptFallsBackFromEvalSha(t *testing.T) {
+	ctx := t.Context()
+	client := newGoRedisClient(t, &redis.Options{})
+
+	script := redis.NewScript(`
+		local current = redis.call('GET', KEYS[1])
+		if current == false then
+			current = ARGV[1]
+		else
+			current = current .. ARGV[1]
+		end
+		redis.call('SET', KEYS[1], current)
+
+		return current
+	`)
+
+	// The first run misses the cache and falls back to EVAL; the second finds the digest.
+	for _, want := range []string{"a", "aa"} {
+		got, err := script.Run(ctx, client, []string{"{default}:trie"}, "a").Text()
+		if err != nil || got != want {
+			t.Fatalf("Run() = %q, %v, want %q", got, err, want)
+		}
+	}
+
+	if loaded, err := client.ScriptExists(ctx, script.Hash()).Result(); err != nil || !loaded[0] {
+		t.Fatalf("ScriptExists() = %v, %v, want [true]", loaded, err)
+	}
+}
+
 func TestGoRedisStringsAndExpiry(t *testing.T) {
 	ctx := t.Context()
 	client := newGoRedisClient(t, &redis.Options{})

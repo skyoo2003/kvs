@@ -63,9 +63,10 @@ const (
 	// shape as respPushBytes; a budget shared across connections only if that ever bites.
 	respMaxQueuedBytes = 64 * 1024 * 1024
 
-	// respQueueOverhead is charged per queued command on top of its arguments, so that a batch
-	// of tiny commands is bounded by the same budget as a batch of large ones. The slice headers
-	// behind one parsed command cost more than its bytes do when the bytes are few.
+	// respQueueOverhead is charged per queued argument on top of its bytes, so that a batch of
+	// tiny arguments is bounded by the same budget as a batch of large ones. It has to be per
+	// argument rather than per command: one MSET may carry a million empty arguments, whose
+	// slice headers and allocations cost tens of megabytes while their bytes cost nothing.
 	respQueueOverhead = 64
 
 	respErrQueueTooBig = "ERR transaction queue exceeds the per-connection budget"
@@ -92,6 +93,7 @@ type RESPServer struct {
 	password string
 	broker   *respBroker
 	cursors  respCursors
+	scripts  respScripts
 	lastID   atomic.Int64
 
 	mu       sync.Mutex
@@ -280,6 +282,12 @@ type respConn struct {
 	pushes    chan respPush
 	pushBytes atomic.Int64
 	done      chan struct{}
+
+	// dropped marks the hang-up below as already reported. A closed connection stays in the
+	// broker until its read loop notices, so every later publish trips the same budget, and
+	// without this one slow subscriber under a fast publisher fills the log with one line per
+	// message.
+	dropped atomic.Bool
 
 	// tx is the transaction a command should run in instead of opening its own. EXEC sets
 	// it so that every queued command shares one lock hold and lands atomically.
@@ -500,7 +508,10 @@ func (c *respConn) deliver(push respPush) {
 // dropSlowSubscriber hangs up on a subscriber that cannot keep up, and says so. The disconnect is
 // deliberate, but without a line naming it an operator sees only a subscriber that vanishes.
 func (c *respConn) dropSlowSubscriber(reason string) {
-	log.Printf("resp: dropping connection %d: %s", c.id, reason)
+	if c.dropped.CompareAndSwap(false, true) {
+		log.Printf("resp: dropping connection %d: %s", c.id, reason)
+	}
+
 	_ = c.netConn.Close()
 }
 
@@ -564,7 +575,7 @@ func (c *respConn) dispatch(args [][]byte) error {
 func (c *respConn) queue(args [][]byte) bool {
 	size := respQueueOverhead
 	for _, arg := range args {
-		size += len(arg)
+		size += len(arg) + respQueueOverhead
 	}
 
 	if c.queuedBytes+size > respMaxQueuedBytes {

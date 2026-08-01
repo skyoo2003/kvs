@@ -118,12 +118,34 @@ releasing it, so a slow client cannot stall other writers.
 
 One transaction may queue up to **64 MiB** of commands. A queue holds every command until `EXEC`
 runs it, so the budget is what keeps one connection from queueing until the process runs out of
-memory. A command over the budget is refused and marks the transaction, so `EXEC` answers
-`EXECABORT` rather than applying part of a batch and dropping the rest.
+memory. Each argument is charged its bytes plus a fixed overhead, because a command carrying a
+million empty arguments costs the server far more than its bytes say. A command over the budget
+is refused and marks the transaction, so `EXEC` answers `EXECABORT` rather than applying part of
+a batch and dropping the rest.
 
 ### Publish and subscribe
 
 `PSUBSCRIBE` `PUBLISH` `PUNSUBSCRIBE` `SUBSCRIBE` `UNSUBSCRIBE`
+
+### Scripting
+
+`EVAL` `EVALSHA` `SCRIPT LOAD` `SCRIPT EXISTS` `SCRIPT FLUSH`
+
+Scripts are Lua 5.1, and a script reaches the keyspace through `redis.call` and `redis.pcall`
+with `KEYS` and `ARGV` bound the way Redis binds them. `redis.error_reply`,
+`redis.status_reply`, and `redis.sha1hex` are there too, and the table answers to `server` as
+well, the name Valkey gives it. `redis.log` is accepted and discarded, since kvs has no script
+log to write to and a script that calls it wants to keep running rather than fail.
+
+```sh
+$ redis-cli eval "return redis.call('INCRBY', KEYS[1], ARGV[1])" 1 counter 5
+(integer) 5
+```
+
+`EVALSHA` answers `NOSCRIPT` for a digest the cache does not hold, which is the reply every
+client library keys its fallback on: it sends the digest first and resends the script only
+after seeing that code. `EVAL` caches on the way through, so that fallback needs no
+`SCRIPT LOAD` of its own.
 
 ## Behaviour worth knowing
 
@@ -141,8 +163,9 @@ deleting keys the walk has already passed cannot make it skip one. The handle li
 server rather than on the connection, because client libraries pool connections: the `SCAN` that
 opens an iteration and the one that continues it routinely land on different sockets.
 
-The server remembers **1024** unfinished iterations. Past that, opening a new one forgets an
-arbitrary earlier handle, and a forgotten cursor answers `ERR invalid cursor`. That is
+The server remembers **1024** unfinished iterations. Past that, opening a new one forgets the
+handle that has sat still longest, so an abandoned walk is dropped before a live one, and a
+forgotten cursor answers `ERR invalid cursor`. That is
 deliberately an error rather than an empty final page: `0` with no keys is the protocol's signal
 that a walk is complete, so answering it there would tell a client it had enumerated a keyspace
 it had barely started. A client that sees it should start the iteration again.
@@ -164,12 +187,35 @@ publisher down, which is how Redis bounds a client output buffer.
 **`CONFIG SET` is refused** rather than accepted and ignored. `CONFIG GET` answers for the
 parameters clients probe on connect.
 
+**A script gives up after 5 seconds.** A script holds the store's write lock from its first
+instruction to its last, which is what makes it atomic, so a loop that never ends would stop
+every other client for the life of the process. Redis instead lets a script run forever and
+offers `SCRIPT KILL`, which works only because it can still serve a second connection while
+the first sits in the interpreter. A stopped script keeps whatever it had already written, the
+way Redis keeps the writes a script made before it failed.
+
+**A script cannot reach outside the process.** Only the base, `table`, `string`, and `math`
+libraries are open, and `dofile`, `loadfile`, `print`, and `require` are removed along with
+them; `os`, `io`, `debug`, and `package` are never opened. `cjson`, `cmsgpack`, `bit`, and
+`struct` are absent as well, so a script that encodes JSON has to be rewritten or the work
+moved to the client. `redis.call` also refuses the commands that make no sense inside a
+script: the transaction and subscribe families, the scripting commands themselves, and the
+session commands.
+
+The script cache holds up to **16 MiB**. Past that `EVAL` still runs the script and only skips
+caching it, which costs the client the `EVALSHA` shortcut rather than the command, while
+`SCRIPT LOAD` reports an error because caching is all it was asked to do. `SCRIPT FLUSH`
+releases the budget.
+
 ## Not implemented
 
-Replication, cluster mode, RDB and AOF persistence, Lua scripting (`EVAL`), functions,
-keyspace notifications, streams, blocking commands (`BLPOP` and friends), ACLs beyond a
-single password, RESP3 push and attribute types, `MONITOR`, `OBJECT`, bit operations, `GEO`,
-and HyperLogLog.
+Replication, cluster mode, RDB and AOF persistence, functions (`FCALL`), keyspace
+notifications, streams, blocking commands (`BLPOP` and friends), ACLs beyond a single
+password, RESP3 push and attribute types, `MONITOR`, `OBJECT`, bit operations, `GEO`, and
+HyperLogLog.
+
+`SCRIPT KILL` and the `_RO` script variants are absent too, as are the `cjson` and `cmsgpack`
+libraries inside a script.
 
 `ZADD` with `INCR` and the `NX`, `XX`, `GT`, and `LT` options on `EXPIRE` are also absent, as is
 `LIMIT` on `ZRANGEBYSCORE` and `ZREVRANGEBYSCORE`. `ZRANGE` takes positions only, so its

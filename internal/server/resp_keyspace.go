@@ -1,6 +1,7 @@
 package server
 
 import (
+	"math"
 	"slices"
 	"strconv"
 	"strings"
@@ -35,8 +36,16 @@ const (
 // different sockets, and per-connection state made the second one report an empty final page.
 // A cursor is only a resume point, so it is harmless for any connection to present it.
 type respCursors struct {
-	mu sync.Mutex
-	at map[uint64]string
+	mu   sync.Mutex
+	at   map[uint64]respCursorAt
+	tick uint64
+}
+
+// respCursorAt is one open iteration: where it stopped, and when it last moved. The counter
+// only has to order the handles against each other, so it is a tick rather than a clock.
+type respCursorAt struct {
+	after string
+	used  uint64
 }
 
 // resume reports where a cursor left off. Cursor zero starts a fresh iteration.
@@ -48,9 +57,9 @@ func (r *respCursors) resume(cursor uint64) (after string, resumed, known bool) 
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	after, known = r.at[cursor]
+	at, known := r.at[cursor]
 
-	return after, known, known
+	return at.after, known, known
 }
 
 // remember stores where a page stopped, reusing the handle when an iteration is already under
@@ -64,27 +73,40 @@ func (r *respCursors) remember(cursor uint64, resumeAfter string) uint64 {
 	defer r.mu.Unlock()
 
 	if r.at == nil {
-		r.at = make(map[uint64]string)
+		r.at = make(map[uint64]respCursorAt)
 	}
 
 	if cursor == 0 {
-		// Abandoned iterations are never finished, so cap how many may pile up. Eviction picks
-		// by map order and cannot tell an abandoned handle from a live one, which is why
-		// presenting a forgotten cursor is an error rather than a finished page: the client
-		// retries instead of believing its walk covered the keyspace.
-		for id := range r.at {
-			if len(r.at) < respScanCursorLimit {
-				break
-			}
-			delete(r.at, id)
+		// Abandoned iterations are never finished, so cap how many may pile up. The victim is
+		// the handle that has sat still longest, because an arbitrary one lets unrelated walks
+		// kill each other's live cursors: the table holds 1024 iterations while the server
+		// accepts respMaxConns clients, and presenting a forgotten cursor is an error the
+		// client has to restart its walk from.
+		// ponytail: an O(n) scan of 1024 entries, and only when the table is full; a heap or an
+		// intrusive list only if the cap ever grows enough for that to show up.
+		for len(r.at) >= respScanCursorLimit {
+			r.forgetIdlestLocked()
 		}
 
 		cursor = r.newHandle()
 	}
 
-	r.at[cursor] = resumeAfter
+	r.tick++
+	r.at[cursor] = respCursorAt{after: resumeAfter, used: r.tick}
 
 	return cursor
+}
+
+// forgetIdlestLocked drops the handle whose last page is furthest back. The caller holds mu.
+func (r *respCursors) forgetIdlestLocked() {
+	victim, oldest := uint64(0), uint64(math.MaxUint64)
+	for id, at := range r.at {
+		if at.used <= oldest {
+			victim, oldest = id, at.used
+		}
+	}
+
+	delete(r.at, victim)
 }
 
 // newHandle draws an unused cursor. Zero is reserved for "start a fresh iteration", so it is

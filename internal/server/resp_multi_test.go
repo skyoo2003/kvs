@@ -56,8 +56,6 @@ func TestRESPTransactionAbortsAfterQueueError(t *testing.T) {
 	client.do("-EXECABORT Transaction discarded because of previous errors."+respCRLF, "EXEC")
 }
 
-// TestRESPTransactionReportsCommandErrorsInline checks that an error raised while running a
-// queued command is one element of the reply array, not a failure of the whole EXEC.
 // TestRESPTransactionRefusesOversizedQueue keeps one client's MULTI from growing without bound.
 // The queue retained every queued command's arguments with no ceiling, so a single connection
 // could queue until the process ran out of memory, and that takes the HTTP and gRPC servers
@@ -96,6 +94,42 @@ func TestRESPTransactionRefusesOversizedQueue(t *testing.T) {
 	client.do("$-1"+respCRLF, "GET", "k:0")
 }
 
+// TestRESPTransactionRefusesManyTinyArguments is the hole a per-command overhead left open. The
+// budget counted a command's bytes plus one fixed charge, so a command carrying a hundred
+// thousand empty arguments cost almost nothing against it while retaining a slice header and an
+// allocation for each one. A few of those outweigh the whole 64 MiB ceiling.
+func TestRESPTransactionRefusesManyTinyArguments(t *testing.T) {
+	client := newRESPClient(t, kvs.NewStore())
+
+	client.do("+OK"+respCRLF, "MULTI")
+
+	// MSET takes any number of pairs, so one command is enough to carry them.
+	const arguments = 100_000
+	args := make([]string, 0, arguments)
+	args = append(args, "MSET")
+	for i := range arguments - 1 {
+		args = append(args, "k"+itoa(i))
+	}
+
+	refused := false
+	for range 16 {
+		client.send(args...)
+		if reply := client.readLine(); reply != "+QUEUED" {
+			if !strings.HasPrefix(reply, "-ERR") {
+				t.Fatalf("queued command reply = %q, want +QUEUED or an error", reply)
+			}
+			refused = true
+
+			break
+		}
+	}
+	if !refused {
+		t.Fatal("a MULTI queued millions of arguments without refusal, want the ceiling to count them")
+	}
+
+	client.do("-EXECABORT Transaction discarded because of previous errors."+respCRLF, "EXEC")
+}
+
 // TestRESPTransactionQueueBudgetResets keeps a refused batch from disabling the connection: the
 // budget belongs to one transaction, not to the session.
 func TestRESPTransactionQueueBudgetResets(t *testing.T) {
@@ -117,6 +151,8 @@ func TestRESPTransactionQueueBudgetResets(t *testing.T) {
 	client.do("$1"+respCRLF+"v"+respCRLF, "GET", "after")
 }
 
+// TestRESPTransactionReportsCommandErrorsInline checks that an error raised while running a
+// queued command is one element of the reply array, not a failure of the whole EXEC.
 func TestRESPTransactionReportsCommandErrorsInline(t *testing.T) {
 	client := newRESPClient(t, kvs.NewStore())
 

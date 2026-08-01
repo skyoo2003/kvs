@@ -32,6 +32,7 @@ const (
 	// commands that differ only in unit or in whether an existing key blocks the write.
 	respCmdDecr      = "DECR"
 	respCmdDecrBy    = "DECRBY"
+	respCmdExists    = "EXISTS"
 	respCmdExpire    = "EXPIRE"
 	respCmdExpireAt  = "EXPIREAT"
 	respCmdMSetNX    = "MSETNX"
@@ -56,6 +57,7 @@ const (
 	respCmdZScore           = "ZSCORE"
 
 	respCmdAuth         = "AUTH"
+	respCmdClient       = "CLIENT"
 	respCmdDiscard      = "DISCARD"
 	respCmdExec         = "EXEC"
 	respCmdHello        = "HELLO"
@@ -67,6 +69,7 @@ const (
 	respCmdReset        = "RESET"
 	respCmdSubscribe    = "SUBSCRIBE"
 	respCmdUnsubscribe  = "UNSUBSCRIBE"
+	respCmdUnwatch      = "UNWATCH"
 	respCmdWatch        = "WATCH"
 )
 
@@ -89,6 +92,7 @@ func respCommandFor(name string) (respCommand, bool) {
 			respConnectionCommands(), respTransactionTable(), respPubSubCommands(),
 			respStringCommands(), respKeyspaceCommands(), respHashCommands(),
 			respListCommands(), respSetCommands(), respZSetCommands(),
+			respScriptCommands(),
 		} {
 			maps.Copy(respCommands, group)
 		}
@@ -102,17 +106,17 @@ func respCommandFor(name string) (respCommand, bool) {
 // respConnectionCommands holds the connection and server commands.
 func respConnectionCommands() map[string]respCommand {
 	return map[string]respCommand{
-		"CLIENT":     {run: (*respConn).cmdClient, minArgs: 2, maxArgs: -1},
-		"COMMAND":    {run: (*respConn).cmdCommand, minArgs: 1, maxArgs: -1},
-		"CONFIG":     {run: (*respConn).cmdConfig, minArgs: 2, maxArgs: -1},
-		"ECHO":       {run: (*respConn).cmdEcho, minArgs: 2, maxArgs: 2},
-		respCmdHello: {run: (*respConn).cmdHello, minArgs: 1, maxArgs: -1},
-		respInfo:     {run: (*respConn).cmdInfo, minArgs: 1, maxArgs: -1},
-		respCmdPing:  {run: (*respConn).cmdPing, minArgs: 1, maxArgs: 2},
-		respCmdQuit:  {run: (*respConn).cmdQuit, minArgs: 1, maxArgs: 1},
-		"SELECT":     {run: (*respConn).cmdSelect, minArgs: 2, maxArgs: 2},
-		respCmdAuth:  {run: (*respConn).cmdAuth, minArgs: 2, maxArgs: 3},
-		respCmdReset: {run: (*respConn).cmdReset, minArgs: 1, maxArgs: 1},
+		respCmdClient: {run: (*respConn).cmdClient, minArgs: 2, maxArgs: -1},
+		"COMMAND":     {run: (*respConn).cmdCommand, minArgs: 1, maxArgs: -1},
+		"CONFIG":      {run: (*respConn).cmdConfig, minArgs: 2, maxArgs: -1},
+		"ECHO":        {run: (*respConn).cmdEcho, minArgs: 2, maxArgs: 2},
+		respCmdHello:  {run: (*respConn).cmdHello, minArgs: 1, maxArgs: -1},
+		respInfo:      {run: (*respConn).cmdInfo, minArgs: 1, maxArgs: -1},
+		respCmdPing:   {run: (*respConn).cmdPing, minArgs: 1, maxArgs: 2},
+		respCmdQuit:   {run: (*respConn).cmdQuit, minArgs: 1, maxArgs: 1},
+		"SELECT":      {run: (*respConn).cmdSelect, minArgs: 2, maxArgs: 2},
+		respCmdAuth:   {run: (*respConn).cmdAuth, minArgs: 2, maxArgs: 3},
+		respCmdReset:  {run: (*respConn).cmdReset, minArgs: 1, maxArgs: 1},
 	}
 }
 
@@ -123,7 +127,7 @@ func respTransactionTable() map[string]respCommand {
 		respCmdExec:    {run: (*respConn).cmdExec, minArgs: 1, maxArgs: 1},
 		respCmdDiscard: {run: (*respConn).cmdDiscard, minArgs: 1, maxArgs: 1},
 		respCmdWatch:   {run: (*respConn).cmdWatch, minArgs: 2, maxArgs: -1},
-		"UNWATCH":      {run: (*respConn).cmdUnwatch, minArgs: 1, maxArgs: 1},
+		respCmdUnwatch: {run: (*respConn).cmdUnwatch, minArgs: 1, maxArgs: 1},
 	}
 }
 
@@ -170,7 +174,7 @@ func respKeyspaceCommands() map[string]respCommand {
 		"COPY":           {run: (*respConn).cmdCopy, minArgs: 3, maxArgs: -1},
 		"DBSIZE":         {run: (*respConn).cmdDBSize, minArgs: 1, maxArgs: 1},
 		"DEL":            {run: (*respConn).cmdDel, minArgs: 2, maxArgs: -1},
-		"EXISTS":         {run: (*respConn).cmdExists, minArgs: 2, maxArgs: -1},
+		respCmdExists:    {run: (*respConn).cmdExists, minArgs: 2, maxArgs: -1},
 		respCmdExpire:    {run: (*respConn).cmdExpire, minArgs: 3, maxArgs: 3},
 		respCmdExpireAt:  {run: (*respConn).cmdExpire, minArgs: 3, maxArgs: 3},
 		"FLUSHALL":       {run: (*respConn).cmdFlush, minArgs: 1, maxArgs: -1},
@@ -366,6 +370,7 @@ func (c *respConn) cmdHello(args [][]byte) error {
 func (c *respConn) applyHelloOptions(args [][]byte) error {
 	name := ""
 	named := false
+	authing := false
 	var user, password []byte
 
 	for i := 2; i < len(args); i++ {
@@ -374,7 +379,7 @@ func (c *respConn) applyHelloOptions(args [][]byte) error {
 			if i+2 >= len(args) {
 				return errRESPSyntax
 			}
-			user, password = args[i+1], args[i+2]
+			user, password, authing = args[i+1], args[i+2], true
 			i += 2
 		case respSubSetName:
 			if i+1 >= len(args) {
@@ -387,7 +392,7 @@ func (c *respConn) applyHelloOptions(args [][]byte) error {
 		}
 	}
 
-	if user != nil {
+	if authing {
 		if err := c.authenticate(user, password); err != nil {
 			return err
 		}
