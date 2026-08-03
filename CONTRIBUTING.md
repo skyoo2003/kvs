@@ -14,7 +14,7 @@ Thanks for your interest in contributing!
 .
 ├── kvs.go              # Store (Get, Put, Delete), in memory unless Open gives it a log
 ├── log.go              # Append log the keyspace survives a restart through
-├── replication.go      # The store surface a cluster drives it through
+├── replication.go      # The store methods a cluster drives the keyspace through
 ├── cmd/kvs/            # CLI entrypoint (Cobra)
 ├── internal/server/    # HTTP, gRPC, and RESP server implementations
 ├── internal/cluster/   # Raft membership, kept out of the library API

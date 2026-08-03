@@ -50,6 +50,63 @@ func TestRESPCodecRoundTrip(t *testing.T) {
 	}
 }
 
+// Speculation hands a command a clone and then puts the keyspace back, so a clone sharing storage
+// with the original would write straight through that rollback and leave the store holding a
+// change the cluster never agreed to. Each container is cloned, the clone is changed, and the
+// original has to come out untouched.
+func TestRESPCodecCloneLeavesTheOriginalAlone(t *testing.T) {
+	zset := newRESPZSet()
+	zset.set("alice", 1.5)
+
+	tests := []struct {
+		name   string
+		value  interface{}
+		change func(interface{})
+	}{
+		{
+			name:   "list",
+			value:  newRESPList([]string{"go", "rust"}),
+			change: func(clone interface{}) { clone.(*respList).pushBack([]string{"python"}) },
+		},
+		{
+			name:   "hash",
+			value:  map[string]string{"name": "kvs", "language": "go"},
+			change: func(clone interface{}) { clone.(map[string]string)["language"] = "rust" },
+		},
+		{
+			name:   "set",
+			value:  map[string]struct{}{"kv": {}, "go": {}},
+			change: func(clone interface{}) { delete(clone.(map[string]struct{}), "go") },
+		},
+		{
+			name:   "zset",
+			value:  zset,
+			change: func(clone interface{}) { clone.(*respZSet).set("alice", 99) },
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			before := respFingerprint(test.value)
+
+			clone := respCodec{}.Clone(test.value)
+			if got := respFingerprint(clone); got != before {
+				t.Fatalf("Clone() = %s, want %s", got, before)
+			}
+
+			test.change(clone)
+
+			if got := respFingerprint(test.value); got != before {
+				t.Fatalf("changing the clone changed the original: %s, want %s", got, before)
+			}
+			// Without this the test would also pass on a change that quietly did nothing.
+			if respFingerprint(clone) == before {
+				t.Fatal("the change did not take, so sharing was never tested")
+			}
+		})
+	}
+}
+
 func TestRESPCodecRejectsWhatItCannotStore(t *testing.T) {
 	if _, err := (respCodec{}).Encode(42); !errors.Is(err, kvs.ErrUnsupportedValue) {
 		t.Fatalf("Encode(42) error = %v, want %v", err, kvs.ErrUnsupportedValue)

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"slices"
-	"strings"
 	"testing"
 	"time"
 )
@@ -86,9 +85,22 @@ func TestSpeculateReturnsTheFrameAndChangesNothing(t *testing.T) {
 	if len(lines) != 2 {
 		t.Fatalf("frame holds %d records, want 2", len(lines))
 	}
-	// The frame describes the new world.
-	if got := string(lines[0]); !strings.Contains(got, `WyJnbyIsInJ1c3QiXQ==`) {
-		t.Fatalf("frame record = %s, want it to carry [go rust]", got)
+	// The frame describes the new world. Decoded rather than string-matched: how a record is
+	// spelled is this package's business, and what it means is the test's.
+	rec, err := decodeRecord(lines[0])
+	if err != nil {
+		t.Fatalf("decodeRecord() error = %v", err)
+	}
+	if rec.Op != opSet || rec.Key != "langs" {
+		t.Fatalf("frame record = %s %q, want %s %q", rec.Op, rec.Key, opSet, "langs")
+	}
+
+	value, err := (mutableCodec{}).Decode(rec.Value)
+	if err != nil {
+		t.Fatalf("Decode() error = %v", err)
+	}
+	if got, _ := value.(*[]string); !slices.Equal(*got, []string{"go", "rust"}) {
+		t.Fatalf("frame carries %v, want %v", *got, []string{"go", "rust"})
 	}
 
 	// The store is still in the old one, in-place change and all.
