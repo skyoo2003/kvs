@@ -19,6 +19,12 @@ import (
 var (
 	// ErrKeyNotFound is returned when the requested key does not exist.
 	ErrKeyNotFound = errors.New("key not found")
+
+	// ErrNoCodec is what the paths that have to render a value get back when no Codec has been
+	// set. A Store from NewStore has none until SetCodec, which is enough for a caller who only
+	// reads and writes through it, and not enough for one asking it to snapshot or speculate:
+	// those have to turn values into bytes.
+	ErrNoCodec = errors.New("no codec set")
 )
 
 // reapSample bounds how many keys carrying an expiry one write transaction inspects, so the
@@ -174,6 +180,13 @@ func (s *Store) snapshotLocked() (frame, error) {
 // receive. Encoding here rather than at each Set is what makes a value the codec cannot handle
 // fail the write that stored it.
 func (s *Store) encodeFrame(pending []record) (frame, error) {
+	// The one place a stored value becomes bytes, and so the one place worth checking. Nothing to
+	// encode needs no codec, which is why an empty keyspace snapshots without one and a keyspace
+	// holding a single key does not.
+	if len(pending) > 0 && s.codec == nil {
+		return nil, ErrNoCodec
+	}
+
 	lines := make(frame, 0, len(pending))
 
 	for i := range pending {
@@ -273,6 +286,13 @@ func (s *Store) Write(fn func(tx *Tx) error) error {
 func (s *Store) Speculate(fn func(tx *Tx) error) ([][]byte, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	// Checked before fn runs rather than inside the Get it would fail in: a speculating Get hands
+	// back a clone, the codec is what clones, and Get has no error to return. One check at the
+	// door means the ones behind it cannot be reached without a codec.
+	if s.codec == nil {
+		return nil, ErrNoCodec
+	}
 
 	tx := &Tx{ReadTx: ReadTx{store: s, now: time.Now()}, speculative: true}
 

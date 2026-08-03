@@ -144,6 +144,47 @@ func TestNotLeaderErrorCarriesTheLeader(t *testing.T) {
 	}
 }
 
+// Asking a store with no codec to render a value used to panic on a nil dereference, and only once
+// a key existed: an empty keyspace has nothing to encode, so the crash hid from anything that
+// checked the easy case first. Both halves are pinned here.
+func TestNoCodecIsAnErrorRatherThanACrash(t *testing.T) {
+	store := NewStore()
+
+	// Nothing to encode, so nothing needs a codec.
+	if _, err := store.Snapshot(); err != nil {
+		t.Fatalf("Snapshot() on an empty store error = %v, want nil", err)
+	}
+
+	if err := store.Put("greeting", "hello"); err != nil {
+		t.Fatalf("Put() error = %v", err)
+	}
+
+	if _, err := store.Snapshot(); !errors.Is(err, ErrNoCodec) {
+		t.Fatalf("Snapshot() error = %v, want %v", err, ErrNoCodec)
+	}
+
+	// Speculate refuses at the door, before running fn: the Get inside one clones through the
+	// codec and has no error of its own to report.
+	ran := false
+	if _, err := store.Speculate(func(tx *Tx) error {
+		ran = true
+		tx.Get("greeting")
+
+		return nil
+	}); !errors.Is(err, ErrNoCodec) {
+		t.Fatalf("Speculate() error = %v, want %v", err, ErrNoCodec)
+	}
+	if ran {
+		t.Error("Speculate() ran fn without a codec, want it refused first")
+	}
+
+	// And with one set, both work.
+	store.SetCodec(StringCodec{})
+	if _, err := store.Snapshot(); err != nil {
+		t.Fatalf("Snapshot() after SetCodec error = %v", err)
+	}
+}
+
 func newReplicatedStore(t *testing.T) *Store {
 	t.Helper()
 
