@@ -66,7 +66,7 @@ brews:
     name: homebrew-tap
     token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
   homepage: "https://github.com/skyoo2003/kvs"
-  description: "A key-value store as a distributed server or a Go module"
+  description: "A key-value store you can run as a server or import as a Go module"
   license: "MIT"
   install: |
     bin.install "kvs"

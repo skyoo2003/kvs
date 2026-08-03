@@ -106,6 +106,11 @@ func (h *httpHandler) handlePut(w http.ResponseWriter, r *http.Request, key stri
 	}
 
 	if err := h.store.Put(key, req.Value); err != nil {
+		if errors.Is(err, kvs.ErrNotLeader) {
+			writeJSONError(w, http.StatusConflict, err.Error())
+			return
+		}
+
 		writeJSONError(w, http.StatusInternalServerError, "failed to store key")
 		return
 	}
@@ -117,6 +122,10 @@ func (h *httpHandler) handleDelete(w http.ResponseWriter, key string) {
 	if err := h.store.Delete(key); err != nil {
 		if errors.Is(err, kvs.ErrKeyNotFound) {
 			writeJSONError(w, http.StatusNotFound, err.Error())
+			return
+		}
+		if errors.Is(err, kvs.ErrNotLeader) {
+			writeJSONError(w, http.StatusConflict, err.Error())
 			return
 		}
 

@@ -1,6 +1,6 @@
 ---
 title: "Contributing"
-weight: 3
+weight: 6
 ---
 
 Contributions are welcome! See [`CONTRIBUTING.md`](https://github.com/skyoo2003/kvs/blob/main/CONTRIBUTING.md) for the full guide.

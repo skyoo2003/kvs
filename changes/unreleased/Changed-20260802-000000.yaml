@@ -1,0 +1,3 @@
+kind: Changed
+body: INFO and HELLO now report what a clustered node actually is — a follower answers role:slave and names the leader in master_host and master_port, a leader counts the others in connected_slaves, and cluster_enabled:0 says kvs is not Redis Cluster
+time: 2026-08-02T00:00:00.000000+09:00

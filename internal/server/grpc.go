@@ -63,6 +63,10 @@ func (s *kvStoreServer) Put(_ context.Context, req *kvsv1.PutRequest) (*kvsv1.Pu
 	}
 
 	if err := s.store.Put(req.GetKey(), req.GetValue()); err != nil {
+		if errors.Is(err, kvs.ErrNotLeader) {
+			return nil, status.Error(codes.FailedPrecondition, err.Error())
+		}
+
 		return nil, status.Error(codes.Internal, "failed to store key")
 	}
 
@@ -77,6 +81,9 @@ func (s *kvStoreServer) Delete(_ context.Context, req *kvsv1.DeleteRequest) (*kv
 	if err := s.store.Delete(req.GetKey()); err != nil {
 		if errors.Is(err, kvs.ErrKeyNotFound) {
 			return nil, status.Error(codes.NotFound, err.Error())
+		}
+		if errors.Is(err, kvs.ErrNotLeader) {
+			return nil, status.Error(codes.FailedPrecondition, err.Error())
 		}
 
 		return nil, status.Error(codes.Internal, "failed to delete key")

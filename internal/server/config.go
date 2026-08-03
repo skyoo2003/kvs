@@ -14,10 +14,28 @@ type Config struct {
 	// anything that can list processes. It comes from the config file or from
 	// KVS_RESP_PASSWORD instead.
 	RESPPassword string
+	// DataDir is where the append log lives, and setting it is what makes the keyspace
+	// outlive the process. An empty value keeps everything in memory.
+	//
+	// Off by default because turning it on means writing files somewhere nobody named, and
+	// because starting empty is what kvs has always done.
+	DataDir string
+	// RaftAddr is where the other nodes of the cluster talk to this one. Setting it is what
+	// puts the node in a cluster: every write then has to pass consensus, and losing the leader
+	// costs an election rather than a person.
+	//
+	// Empty means a single node, which is what kvs has always been and still is by default.
+	RaftAddr string
+	// JoinAddr is the RESP address of a node already in the cluster. Empty on the first node,
+	// which starts the cluster; set on every node after it.
+	JoinAddr string
+	// NodeID is this node's stable identity, and the address a client is redirected to when it
+	// reaches the wrong node. It defaults to RESPAddr for that reason.
+	NodeID string
 }
 
 func DefaultConfig() Config {
-	return Config{
+	cfg := Config{
 		HTTPAddr: ":3456",
 		GRPCAddr: ":3457",
 		// Port 6379 is scanned continuously across the public internet, and kvs has no
@@ -25,4 +43,8 @@ func DefaultConfig() Config {
 		// widen it deliberately.
 		RESPAddr: "127.0.0.1:6379",
 	}
+	// A node is redirected to by address, so its identity follows the one clients use.
+	cfg.NodeID = cfg.RESPAddr
+
+	return cfg
 }

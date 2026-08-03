@@ -12,16 +12,14 @@ Thanks for your interest in contributing!
 
 ```
 .
-├── kvs.go              # In-memory Store (Get, Put, Delete)
+├── kvs.go              # Store (Get, Put, Delete), in memory unless Open gives it a log
+├── log.go              # Append log the keyspace survives a restart through
+├── replication.go      # The store methods a cluster drives the keyspace through
 ├── cmd/kvs/            # CLI entrypoint (Cobra)
 ├── internal/server/    # HTTP, gRPC, and RESP server implementations
+├── internal/cluster/   # Raft membership, kept out of the library API
 ├── api/kvsv1/          # Generated protobuf/gRPC code
-├── pkg/
-│   ├── bitset/         # Bitset data structure
-│   ├── cuckoofilter/   # Cuckoo filter implementation
-│   ├── lsm/            # In-memory LSM tree
-│   ├── rbt/            # Red-black tree
-│   └── resp/           # RESP2 wire protocol codec
+├── pkg/resp/           # RESP2 wire protocol codec
 ├── content/            # Hugo documentation site
 └── changes/            # Changelog fragments (Changie)
 ```

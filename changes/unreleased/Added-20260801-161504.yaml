@@ -1,0 +1,3 @@
+kind: Added
+body: Run a Raft cluster with `kvs serve --raft-addr` and `--join`; writes pass consensus, and losing the leader triggers an election instead of needing a person
+time: 2026-08-01T16:15:04.621770+09:00

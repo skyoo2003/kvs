@@ -91,10 +91,13 @@ type respCommand struct {
 type RESPServer struct {
 	store    *kvs.Store
 	password string
-	broker   *respBroker
-	cursors  respCursors
-	scripts  respScripts
-	lastID   atomic.Int64
+	// cluster is set only when this node runs in one. Wired up at startup, before anything
+	// serves, and read-only after that.
+	cluster clusterNode
+	broker  *respBroker
+	cursors respCursors
+	scripts respScripts
+	lastID  atomic.Int64
 
 	mu       sync.Mutex
 	conns    map[*respConn]struct{}
@@ -119,6 +122,11 @@ func NewRESPServer(store *kvs.Store, password string) *RESPServer {
 
 // Serve accepts clients until listener is closed or Close is called. A graceful close
 // reports no error.
+// SetCluster tells this server which cluster it belongs to. Call it before serving.
+func (s *RESPServer) SetCluster(node clusterNode) {
+	s.cluster = node
+}
+
 func (s *RESPServer) Serve(listener net.Listener) error {
 	// Close has to reach the listener, or Accept below stays blocked after shutdown and keeps
 	// the port bound for the rest of the process's life.
@@ -336,6 +344,11 @@ func (c *respConn) write(fn func(tx *kvs.Tx) error) error {
 // writeFailure reports a command error to the client. Every error a command closure
 // returns describes bad input or a type conflict, so echoing it is safe.
 func (c *respConn) writeFailure(err error) error {
+	// A write that arrived at the wrong node is not bad input: say where to take it instead.
+	if errors.Is(err, kvs.ErrNotLeader) {
+		return c.writer.WriteError(movedTo(err))
+	}
+
 	return c.writer.WriteError(err.Error())
 }
 
