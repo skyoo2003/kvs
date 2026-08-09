@@ -1,3 +1,5 @@
 kind: Added
 body: A data directory now carries a format version, and kvs refuses to start on one it does not recognise instead of replaying bytes another version laid out; the refusal names both versions and what to do about it, and it covers the Raft store as well as the append log
 time: 2026-08-09T12:00:00.000000+09:00
+custom:
+    Issue: "245"
