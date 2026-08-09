@@ -44,6 +44,13 @@ make build     # build binary to dist/
 make clean     # remove dist/
 ```
 
+`make all` is what CI runs. The long one is separate and opt-in:
+
+```sh
+make soak            # 5 minutes of load with a node restarted every 30 seconds
+make soak SOAK=4h    # the full run the numbers in the docs come from
+```
+
 ### Pre-commit Hooks (optional)
 
 ```sh

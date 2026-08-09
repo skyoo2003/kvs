@@ -1,0 +1,5 @@
+kind: Documentation
+body: The durability and clustering page now carries measured numbers from a four hour run under load with a node restarted every thirty seconds - 350,260 acknowledged writes and none of them lost across 457 restarts, 50 bytes of append log per write, and the two things that do grow under that churn - along with a make soak target that reproduces it
+time: 2026-08-09T21:00:00.000000+09:00
+custom:
+    Issue: "246"

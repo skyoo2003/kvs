@@ -21,6 +21,14 @@ make lint      # run golangci-lint
 make build     # build binary
 ```
 
+`make all` is what CI runs. The soak test is separate and opt-in, because it is measured in
+hours rather than seconds:
+
+```sh
+make soak            # 5 minutes of load with a node restarted every 30 seconds
+make soak SOAK=4h    # the full run the numbers on the clustering page come from
+```
+
 ## PR Guidelines
 
 - Keep PRs small and focused on a single concern
