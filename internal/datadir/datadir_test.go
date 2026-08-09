@@ -27,9 +27,65 @@ func TestEnsureStampsANewDirectory(t *testing.T) {
 		t.Errorf("format = %q, want %q", got, want)
 	}
 
+	// The stamp is written under a temporary name and renamed into place. None of those names
+	// may survive it, or the next reader finds a directory holding two answers.
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("read dir: %v", err)
+	}
+
+	for _, entry := range entries {
+		if entry.Name() != datadir.FormatName {
+			t.Errorf("%s left behind after stamping", entry.Name())
+		}
+	}
+
 	// Opening it again has to be the ordinary case, not a second stamping.
 	if err := datadir.Ensure(dir); err != nil {
 		t.Errorf("Ensure() on its own directory error = %v", err)
+	}
+}
+
+// A stat that fails for any reason other than absence leaves the question open, and answering
+// it with "nothing here" would stamp this build's version onto another one's keyspace.
+func TestEnsureRefusesWhenItCannotTellWhetherDataIsThere(t *testing.T) {
+	dir := t.TempDir()
+
+	// A symlink pointing at itself is a path that exists and cannot be stat'd. It stands in for
+	// the transient filesystem error this guards against, which a test cannot arrange directly.
+	link := filepath.Join(dir, datadir.LogName)
+	if err := os.Symlink(link, link); err != nil {
+		t.Skipf("symlinks unavailable here: %v", err)
+	}
+
+	err := datadir.Ensure(dir)
+	if err == nil {
+		t.Fatal("Ensure() error = nil, want a refusal")
+	}
+
+	if errors.Is(err, datadir.ErrFormat) {
+		t.Errorf("Ensure() error = %v, want the failure to look, not a verdict on the format", err)
+	}
+
+	if _, statErr := os.Stat(filepath.Join(dir, datadir.FormatName)); statErr == nil {
+		t.Error("the directory was stamped without knowing what it holds")
+	}
+}
+
+// A format file far larger than a version is refused for what it says, not loaded for its size.
+func TestEnsureBoundsWhatItReadsFromTheFormatFile(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, datadir.FormatName), strings.Repeat("x", 1<<20))
+
+	err := datadir.Ensure(dir)
+
+	var formatErr *datadir.FormatError
+	if !errors.As(err, &formatErr) {
+		t.Fatalf("Ensure() error = %v, want a FormatError", err)
+	}
+
+	if len(formatErr.Raw) > 64 {
+		t.Errorf("Raw is %d bytes long, so the whole file was read into memory", len(formatErr.Raw))
 	}
 }
 

@@ -7,6 +7,7 @@ package datadir
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -78,15 +79,19 @@ func Ensure(dir string) error {
 
 	path := filepath.Join(dir, FormatName)
 
-	//nolint:gosec // The path is the data directory the operator named; that is the feature.
-	raw, err := os.ReadFile(path)
+	raw, err := readFormat(path)
 
 	switch {
 	case errors.Is(err, os.ErrNotExist):
 		// An empty directory is a new one. A directory already holding data without a version
 		// was written before this check existed, and guessing which version it is would be
 		// exactly the silent failure this package exists to prevent.
-		if holdsData(dir) {
+		found, dataErr := holdsData(dir)
+		if dataErr != nil {
+			return dataErr
+		}
+
+		if found {
 			return &FormatError{Dir: dir, Missing: true}
 		}
 
@@ -105,23 +110,99 @@ func Ensure(dir string) error {
 	return nil
 }
 
+// maxFormatBytes is more room than a version number will ever need and less than is worth
+// reading into memory. Something has replaced the file if it is longer, and the promise is a
+// refusal that says so, not an allocation the size of whatever was put there.
+const maxFormatBytes = 64
+
+// readFormat returns what the format file holds, or as much of it as could be a version. The
+// caller tells a missing file from an unreadable one, so the error is returned unwrapped.
+func readFormat(path string) ([]byte, error) {
+	//nolint:gosec // The path is the data directory the operator named; that is the feature.
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = file.Close() }()
+
+	return io.ReadAll(io.LimitReader(file, maxFormatBytes))
+}
+
 // holdsData reports whether the directory already carries a keyspace. It looks for the two
 // things kvs puts there by name rather than asking whether the directory is empty, because a
 // freshly mounted volume is not empty — lost+found is there before kvs ever runs.
-func holdsData(dir string) bool {
+func holdsData(dir string) (bool, error) {
 	for _, name := range []string{LogName, RaftName} {
-		if _, err := os.Stat(filepath.Join(dir, name)); err == nil {
-			return true
+		switch _, err := os.Stat(filepath.Join(dir, name)); {
+		case err == nil:
+			return true, nil
+
+		case !errors.Is(err, os.ErrNotExist):
+			// Anything other than "it is not there" leaves the question open, and answering it
+			// with "no data" would stamp this build's version onto a directory that may hold an
+			// older one's keyspace — the silent acceptance this package exists to prevent.
+			return false, fmt.Errorf("look for %s in %s: %w", name, dir, err)
 		}
 	}
 
-	return false
+	return false, nil
 }
 
+// stamp writes the version through a temporary file and renames it into place, so an
+// interrupted write leaves no format file rather than an unreadable one. The difference
+// matters: no file on an empty directory is stamped again next time, whereas a truncated one
+// is a version this build does not recognize and would refuse the directory forever.
 func stamp(path string) error {
-	if err := os.WriteFile(path, []byte(strconv.Itoa(Version)+"\n"), 0o600); err != nil {
+	dir := filepath.Dir(path)
+
+	tmp, err := os.CreateTemp(dir, FormatName+".*")
+	if err != nil {
+		return fmt.Errorf("write data dir format: %w", err)
+	}
+	defer func() { _ = os.Remove(tmp.Name()) }()
+
+	if err := writeAndSync(tmp, strconv.Itoa(Version)+"\n"); err != nil {
 		return fmt.Errorf("write data dir format: %w", err)
 	}
 
-	return nil
+	if err := os.Rename(tmp.Name(), path); err != nil {
+		return fmt.Errorf("write data dir format: %w", err)
+	}
+
+	// The rename is a directory entry, and syncing the file did not make it durable. Without
+	// this a crash can leave data that was flushed afterwards next to no marker at all, which
+	// reads as a directory written before kvs versioned them and is refused from then on.
+	return syncDir(dir)
+}
+
+func writeAndSync(file *os.File, text string) error {
+	if _, err := file.WriteString(text); err != nil {
+		_ = file.Close()
+
+		return err
+	}
+
+	if err := file.Sync(); err != nil {
+		_ = file.Close()
+
+		return err
+	}
+
+	return file.Close()
+}
+
+func syncDir(dir string) error {
+	//nolint:gosec // The path is the data directory the operator named; that is the feature.
+	handle, err := os.Open(dir)
+	if err != nil {
+		return fmt.Errorf("open data dir: %w", err)
+	}
+
+	if err := handle.Sync(); err != nil {
+		_ = handle.Close()
+
+		return fmt.Errorf("sync data dir: %w", err)
+	}
+
+	return handle.Close()
 }
