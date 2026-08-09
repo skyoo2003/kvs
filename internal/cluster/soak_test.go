@@ -224,14 +224,15 @@ func (r *soakRun) report(t *testing.T) {
 	}
 }
 
-// The heap is reported and not asserted on, which is a decision rather than an omission. Over
-// four hours it went from 10MB to 139MB, and a heap profile put more than half of what was
-// still reachable in Raft's own NetworkTransport - a 256KB read buffer and a 256KB write
-// buffer per connection, and this test opens connections faster than a real cluster ever
-// would. The only frame belonging to kvs held 544KB, which is the thousand keys themselves.
-// A threshold here would either be a number picked to pass or a failure nobody can act on, so
-// what stays is the measurement, and clustering.md carries what it means. The assertion that
-// matters is verify: no acknowledged write went missing across 457 restarts.
+// The heap is reported and not asserted on, which is a decision rather than an omission. It
+// held over four hours and 479 restarts, 4.3MB settled to 4.0MB at the end. An earlier version
+// of this test brought each node back the instant it stopped, and that one went from 10MB to
+// 139MB over the same four hours, with more than half of what was still reachable sitting in
+// Raft's own NetworkTransport - a 256KB read buffer and a 256KB write buffer per connection.
+// The only frame belonging to kvs held 544KB, which is the thousand keys themselves. A
+// threshold tuned to pass one of those runs says nothing about the other, so what stays is the
+// measurement, and clustering.md carries what it means. The assertion that matters is the
+// comparison at every restart: no acknowledged value went missing across 479 of them.
 
 func heapAfterGC() heapSample {
 	// Collect first: the question is what is retained, not what has yet to be swept.

@@ -36,12 +36,13 @@ keyspace in memory, so rewriting the log costs nothing extra at that moment and 
 background worker. A long-running process grows its log without bound in the meantime.
 
 How fast is worth knowing before you size a disk. Four hours of continuous writes over a
-thousand keys — 1,527,358 of them, so every key was overwritten some fifteen hundred times —
-left a **76MB log for a keyspace that never exceeded a thousand entries**, at **50 bytes per
-write**. Multiply by your own write rate rather than by that one: the log grows with writes,
-not with time and not with how much data you are keeping. Memory settled over the same four
-hours, 1.06MB to 1.11MB, so it is the disk that needs watching, and a restart is what
-reclaims it.
+thousand keys — 1,726,455 of them, so every key was overwritten some seventeen hundred times —
+left an **87MB log for a keyspace that never exceeded a thousand entries**, at **51 bytes per
+write**. That last figure is this workload's, not yours: a record carries the key and the
+encoded value, so your own average record is what scales it. The shape is what carries over —
+the log grows with writes, not with time and not with how much data you are keeping. Memory
+settled over the same four hours, 1.11MB to 1.22MB, so it is the disk that needs watching, and
+a restart is what reclaims it.
 
 **One node means one disk.** Durability is not availability: a lost disk is lost data, and a
 stopped process is a stopped service. That is what clustering is for.
@@ -78,11 +79,14 @@ eventual: the price is that every write pays one consensus round.
 own.
 
 **Nothing acknowledged was lost over four hours of being knocked down.** A three-node cluster
-took 350,260 writes while one node was stopped and restarted every thirty seconds — 457
-restarts — and at the end every acknowledged write was on every node, holding the value it was
-acknowledged with. No crashes. Writes were refused nearly as often as they were taken, which is
-a client retrying through an election rather than anything being lost: only a write that
-returns is a write kvs claims to have. `make soak SOAK=4h` is that run.
+took 329,631 writes with one node stopped every thirty seconds and left down for ten — 479
+restarts — and **111,516 of those writes were taken while a node was gone**. Each node that
+came back was held against every acknowledged value before the load was allowed to write again,
+so a write that went missing could not be covered up by the next round overwriting its key; all
+three were checked once more at the end. Nothing was missing and nothing crashed. Writes were
+refused slightly more often than they were taken, which is what asking a follower looks like —
+the refusal names the leader — rather than anything being lost: only a write that returns is a
+write kvs claims to have. `make soak SOAK=4h` is that run.
 
 ### What it does not
 
@@ -133,16 +137,19 @@ staying up, not for throughput.
 **A node that restarts faster than it can snapshot never truncates its log.** Raft discards log
 entries only once a snapshot covers them, and it takes one every two to four minutes. In the run
 above each node was going down every ninety seconds and so never lived long enough to take one:
-after four hours every node held **133MB of Raft log for a thousand keys**, none of it
+after four hours every node held **126MB of Raft log for a thousand keys**, none of it
 discardable. A node in a crash loop fills its disk while looking like it is merely restarting.
 A node that stays up snapshots normally and none of this arises.
 
-**Memory grows under that same churn.** Across those four hours the heap went from 10MB to
-139MB. A heap profile puts more than half of what is still reachable in Raft's own network
-transport, which holds a 256KB read buffer and a 256KB write buffer per connection; the only
-frame belonging to kvs held 544KB, which is the thousand keys themselves. Whether it levels off
-beyond that has not been established. A cluster whose nodes reconnect constantly wants a memory
-limit and something to restart it; a settled one showed no such growth.
+**Memory holds under that churn, unless the node comes back instantly.** Across those four
+hours the heap of the one process holding all three nodes ended where it began, 4.3MB once
+settled and 4.0MB after 479 restarts. An earlier version of the same run restarted each node
+the moment it stopped rather than leaving it down, and that one climbed from 10MB to 139MB over
+four hours; a heap profile put more than half of what was still reachable in Raft's own network
+transport, which holds a 256KB read buffer and a 256KB write buffer per connection, while the
+only frame belonging to kvs held 544KB — the thousand keys themselves. Ten seconds down was
+enough for none of that to accumulate. It is the process that crash-loops without pause that
+grows, and it wants a memory limit as much as it wants the disk headroom above.
 
 ## Configuration notes
 
