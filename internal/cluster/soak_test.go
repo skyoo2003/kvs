@@ -24,9 +24,15 @@ const soakKeys = 1000
 // majority with one gone, and taking two would measure a design decision, not a fault.
 const killEvery = 30 * time.Second
 
-// The milestone in one test: hours of writes with a node dying every half minute, and at the
-// end every write kvs acknowledged is on every node. What it reports - writes, restarts, heap,
-// bytes on disk - is the record that says the thing survived, so those numbers go in the docs.
+// downFor is how long it stays away, and writes carry on the whole time. Restarting it straight
+// away would leave it nothing to catch up on, and catching up is the part a restart has to
+// survive; a run that never writes into the gap proves only that a process can be started twice.
+const downFor = 10 * time.Second
+
+// Hours of writes with a node taken away every half minute and kept away while the writes keep
+// coming, held after every restart and again at the end to every value kvs acknowledged. What
+// it reports - writes, restarts, heap, bytes on disk - is the record that says the thing
+// survived, so those numbers go in the docs.
 func TestSoakSurvivesLoadAndFailover(t *testing.T) {
 	if *soakFor == 0 {
 		t.Skip("soak run is off; pass -soak <duration>, or run make soak")
@@ -47,10 +53,16 @@ type soakRun struct {
 	// an error is a retry, not a loss, so only what returned nil is in here.
 	acked map[string]string
 	// last is the key of the most recent acknowledged write, used as the barrier to wait on.
-	last      string
-	writes    int
-	refused   int
-	failovers int
+	last string
+	// down is the node currently stopped, if any, and backAt when it is due to come back.
+	down   *testNode
+	backAt time.Time
+	writes int
+	// shorthanded counts the acknowledged writes taken while a node was stopped. It is the
+	// claim the docs make, so it is counted rather than inferred from the timings.
+	shorthanded int
+	refused     int
+	failovers   int
 	// warmup and final are the heap once the run has settled and at the end of it.
 	warmup heapSample
 	final  heapSample
@@ -83,11 +95,18 @@ func (r *soakRun) load(t *testing.T, over time.Duration) {
 			r.warmup = heapAfterGC()
 		}
 
-		if now.After(nextKill) {
-			r.cycle(t, r.failovers%len(r.nodes))
-			r.failovers++
-			nextKill = time.Now().Add(killEvery)
+		switch {
+		case r.down != nil && now.After(r.backAt):
+			r.bringBack(t)
+
+		case r.down == nil && now.After(nextKill):
+			r.takeDown(t, r.failovers%len(r.nodes))
+			nextKill = now.Add(killEvery)
 		}
+	}
+
+	if r.down != nil {
+		r.bringBack(t)
 	}
 
 	r.final = heapAfterGC()
@@ -101,6 +120,12 @@ func (r *soakRun) put(t *testing.T, key, value string) {
 
 	eventually(t, "a node to take "+key, func() bool {
 		for _, node := range r.nodes {
+			// A node known to be stopped is skipped rather than asked, so that a refusal means
+			// what it says: the leader was somewhere else.
+			if node == r.down {
+				continue
+			}
+
 			if err := node.store.Put(key, value); err != nil {
 				r.refused++
 
@@ -111,6 +136,10 @@ func (r *soakRun) put(t *testing.T, key, value string) {
 			r.last = key
 			r.writes++
 
+			if r.down != nil {
+				r.shorthanded++
+			}
+
 			return true
 		}
 
@@ -118,15 +147,33 @@ func (r *soakRun) put(t *testing.T, key, value string) {
 	})
 }
 
-// cycle takes one node away and brings it back, waiting for it to catch up before returning.
-// The next kill therefore never lands while the cluster is still a node short.
-func (r *soakRun) cycle(t *testing.T, i int) {
+// takeDown stops a node and leaves it stopped. The caller keeps writing, so what the cluster is
+// asked to do is take writes a node short and hand them over when it comes back.
+func (r *soakRun) takeDown(t *testing.T, i int) {
 	t.Helper()
 
-	node := r.nodes[i]
-	node.stop(t)
+	r.down = r.nodes[i]
+	r.down.stop(t)
+	r.backAt = time.Now().Add(downFor)
+}
+
+// bringBack restarts the stopped node and checks it against every acknowledged value before the
+// run is allowed to write again. Checking here rather than only at the end is what makes the
+// check mean something: a value lost while the node was away would otherwise be overwritten by
+// a later round, and the missing write would be gone from the evidence as well as from disk.
+func (r *soakRun) bringBack(t *testing.T) {
+	t.Helper()
+
+	node := r.down
 	node.restart(t)
+	r.down = nil
+	r.failovers++
+
+	// A restart starts the node on an empty store, so this waits out a replay of everything,
+	// not a top-up. Raft applies its log in order, so holding the last write means holding the
+	// rest, and the comparison that follows is a comparison rather than a race.
 	node.mustEventuallyHold(t, r.last, r.acked[r.last])
+	r.mustHoldEverything(t, node)
 
 	// Sampled every restart rather than only at the ends, because two readings cannot tell a
 	// leak from a step change. No forced collection here: this is a trend, and stopping the
@@ -137,20 +184,25 @@ func (r *soakRun) cycle(t *testing.T, i int) {
 		r.failovers, node.id, stats.HeapAlloc, stats.HeapInuse, runtime.NumGoroutine())
 }
 
-// verify is what the run exists for: every write kvs acknowledged has to be on every node with
-// the value it acknowledged. Waiting on one key rather than all of them is enough because Raft
-// applies its log in order - a node holding the last write has applied everything before it.
+// verify is what the run exists for: every value kvs acknowledged has to be on every node when
+// the load stops. It is the last of the checks rather than the only one - each restart has
+// already been held to the same standard against the state at that moment.
 func (r *soakRun) verify(t *testing.T) {
 	t.Helper()
 
 	for _, node := range r.nodes {
 		node.mustEventuallyHold(t, r.last, r.acked[r.last])
+		r.mustHoldEverything(t, node)
+	}
+}
 
-		for key, want := range r.acked {
-			got, err := node.store.Get(key)
-			if err != nil || got != want {
-				t.Errorf("%s Get(%q) = %v, %v, want %v, nil", node.id, key, got, err, want)
-			}
+func (r *soakRun) mustHoldEverything(t *testing.T, node *testNode) {
+	t.Helper()
+
+	for key, want := range r.acked {
+		got, err := node.store.Get(key)
+		if err != nil || got != want {
+			t.Errorf("%s Get(%q) = %v, %v, want %v, nil", node.id, key, got, err, want)
 		}
 	}
 }
@@ -160,6 +212,8 @@ func (r *soakRun) report(t *testing.T) {
 
 	t.Logf("ran %s: %d writes acknowledged over %d keys, %d refused, %d node restarts",
 		*soakFor, r.writes, len(r.acked), r.refused, r.failovers)
+	t.Logf("%d of those writes were taken while a node was stopped, each stopped for %s",
+		r.shorthanded, downFor)
 	t.Logf("heap alloc: %d bytes once settled, %d bytes at the end", r.warmup.alloc, r.final.alloc)
 	t.Logf("heap in use: %d bytes once settled, %d bytes at the end, %d goroutines left",
 		r.warmup.inUse, r.final.inUse, runtime.NumGoroutine())
