@@ -121,6 +121,14 @@ staying up, not for throughput.
 single-node append log rather than adding to it — the same changes written twice would only be
 two things to keep in step.
 
+**The data directory carries a format version.** kvs writes a `format` file into `--data-dir`
+the first time it uses one, and refuses to start on a directory whose version it does not
+recognize — including one written before that file existed. The alternative is a replay reading
+bytes laid out by another version, which surfaces much later and looks like corruption rather
+than a version mismatch. There is no conversion: move the directory aside and load the data
+again. The version covers the Raft store too, so it moves when the consensus library changes
+its own layout.
+
 **`--node-id` is required when there is no RESP listener.** It defaults to `--resp-addr`, so
 `--resp-addr none` leaves nothing to borrow and `serve` refuses to start rather than join a
 cluster under a blank name.

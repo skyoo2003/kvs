@@ -10,6 +10,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/skyoo2003/kvs/internal/datadir"
 )
 
 // ErrUnsupportedValue is what a Codec returns for a value it cannot encode. Failing the write
@@ -57,8 +59,10 @@ const (
 	opFlush = "flush"
 )
 
-// logName is the file the append log lives in, inside the directory Open was given.
-const logName = "kvs.log"
+// logName is the file the append log lives in, inside the directory Open was given. The name
+// belongs to datadir because that package has to recognize a directory holding one, and two
+// spellings of it would mean a log this build writes and the next one fails to notice.
+const logName = datadir.LogName
 
 // record is one durable change. Value holds the encoded form and value the original: encoding
 // is deferred to commit so that a value the codec cannot handle fails the write that stored
