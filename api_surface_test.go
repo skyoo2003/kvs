@@ -21,9 +21,10 @@ const goldenPath = "testdata/api-surface.txt"
 // surface itself, so the warning can be reworded without touching the comparison.
 const headerSep = "# ---\n"
 
-const surfaceHeader = `# Exported API surface promised for v1 - see content/docs/compatibility.md.
-# A line changed or removed below is a breaking change and needs a major version.
-# A line added is a new promise: it cannot be taken back within v1.
+const surfaceHeader = `# Exported API surface of this package - see content/docs/compatibility.md
+# for how much of it v1 promises, and for the cluster plumbing it exempts by name.
+# A line changed or removed below is a breaking change and needs a major version, unless the
+# page exempts it. A line added is a new promise: it cannot be taken back within v1.
 # Regenerate deliberately: go test -run TestPublicAPISurface . -update
 ` + headerSep
 
@@ -62,8 +63,8 @@ func TestPublicAPISurface(t *testing.T) {
 
 	if got != want {
 		t.Errorf("exported API surface changed.\n%s\n\n"+
-			"A changed or removed line is a breaking change; an added line is a new promise.\n"+
-			"See content/docs/compatibility.md. If deliberate, regenerate with:\n"+
+			"A changed or removed line is a breaking change unless compatibility.md exempts it;\n"+
+			"an added line is a new promise. See content/docs/compatibility.md. If deliberate:\n"+
 			"  go test -run TestPublicAPISurface . -update",
 			firstDifference(want, got))
 	}

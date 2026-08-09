@@ -15,8 +15,10 @@ contradicts it.
 
 ### The wire protocols
 
-All three protocols share one keyspace, and that stays true: a value written over HTTP is
-readable over RESP and gRPC, and the reverse.
+All three protocols share one keyspace, and that stays true for the type all three can carry: a
+string written over HTTP is readable over RESP and gRPC, and the reverse. RESP's lists, hashes,
+sets, and sorted sets have no HTTP or gRPC representation, so asking either for a key holding
+one is an error rather than a value.
 
 | Protocol | Promised | Details |
 |---|---|---|
@@ -34,8 +36,9 @@ to answer it.
 
 Every flag on the [CLI Usage](../cli/) page keeps its name, its meaning, and its default,
 along with the config-file key and environment variable that set it. `kvs serve` with no flags
-keeps listening on `:3456` for HTTP, `:3457` for gRPC, and `127.0.0.1:6379` for RESP.
-`kvs version` keeps printing a version.
+keeps asking for `:3456` for HTTP, `:3457` for gRPC, and `127.0.0.1:6379` for RESP — the
+addresses are the promise, not that each one binds, because a default RESP port already taken
+is logged and skipped rather than being fatal. `kvs version` keeps printing a version.
 
 New flags may be added. Existing ones will not change under you.
 
@@ -91,18 +94,22 @@ that happens the release notes say so explicitly, in those words.
 
 ## Trust boundary
 
-**kvs has no authentication, no authorization, and no TLS.** Anyone who can open a connection
-to any of the three listeners can read, change, and delete everything in the keyspace. On a
-clustered node they can also join the cluster, because `--join` goes through the RESP listener
-rather than a second port with its own credentials.
+**kvs has no authorization and no TLS, and only one of its three listeners can ask who you
+are.** Set `resp_password` in the config file or `KVS_RESP_PASSWORD` in the environment — there
+is deliberately no flag, because a flag puts the password in the process list — and the RESP
+listener requires `AUTH` before it answers anything, cluster joins included, since `--join` goes
+through that listener rather than a second port with its own credentials. HTTP and gRPC have
+nothing of the kind: anyone who can open a connection to either can read, change, and delete
+everything in the keyspace, and no listener encrypts anything, so a RESP password crosses the
+wire in the clear.
 
 The defaults reflect that unevenly, and it is worth knowing which is which:
 
-| Listener | Default | Reachable from |
-|---|---|---|
-| HTTP | `:3456` | every interface |
-| gRPC | `:3457` | every interface |
-| RESP | `127.0.0.1:6379` | loopback only |
+| Listener | Default | Reachable from | Can require a password |
+|---|---|---|---|
+| HTTP | `:3456` | every interface | No |
+| gRPC | `:3457` | every interface | No |
+| RESP | `127.0.0.1:6379` | loopback only | Yes, with `resp_password` |
 
 RESP defaults to loopback because port 6379 is scanned continuously across the public
 internet. HTTP and gRPC do not, so a kvs started with defaults on a machine with a public
@@ -111,8 +118,8 @@ address is exposed on two ports.
 Run kvs on a network you trust, or put something that authenticates in front of it. Do not put
 a listener on a public address.
 
-This is a description of v1, not a permanent position. Adding authentication later adds to the
-promise rather than breaking it, so it can arrive in a `v1.x` release.
+This is a description of v1, not a permanent position. Giving the other two listeners the same
+option adds to the promise rather than breaking it, so it can arrive in a `v1.x` release.
 
 ## Further Reading
 

@@ -1,6 +1,7 @@
-# Exported API surface promised for v1 - see content/docs/compatibility.md.
-# A line changed or removed below is a breaking change and needs a major version.
-# A line added is a new promise: it cannot be taken back within v1.
+# Exported API surface of this package - see content/docs/compatibility.md
+# for how much of it v1 promises, and for the cluster plumbing it exempts by name.
+# A line changed or removed below is a breaking change and needs a major version, unless the
+# page exempts it. A line added is a new promise: it cannot be taken back within v1.
 # Regenerate deliberately: go test -run TestPublicAPISurface . -update
 # ---
 ==== kvs.go ====
