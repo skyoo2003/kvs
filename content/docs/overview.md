@@ -69,6 +69,11 @@ func main() {
 }
 ```
 
+## Compatibility
+
+What `v1` promises not to break, what it deliberately leaves out, and the trust boundary kvs
+assumes are on the [Compatibility](../compatibility/) page.
+
 ## License
 
 MIT License. See [LICENSE](https://github.com/skyoo2003/kvs/blob/main/LICENSE) for details.

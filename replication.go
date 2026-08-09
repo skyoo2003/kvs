@@ -33,6 +33,9 @@ func (e *NotLeaderError) Is(target error) bool {
 //
 // Set it before anything serves: it is read without the lock a write would take, on the
 // understanding that it is wired up once at startup.
+//
+// Exported for internal/cluster to reach across the package boundary, and outside the v1
+// compatibility promise: see content/docs/compatibility.md.
 func (s *Store) SetReplicator(replicate func(fn func(tx *Tx) error) error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -60,6 +63,9 @@ func (s *Store) SetCodec(codec Codec) {
 // ReplaceWith throws the keyspace away and rebuilds it from snapshot, which is what a node
 // restored from a cluster snapshot needs: the agreed state is the only authority, so whatever the
 // node held before is worth keeping only until it arrives.
+//
+// Exported for internal/cluster to reach across the package boundary, and outside the v1
+// compatibility promise: see content/docs/compatibility.md.
 func (s *Store) ReplaceWith(snapshot [][]byte) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -74,6 +80,9 @@ func (s *Store) ReplaceWith(snapshot [][]byte) error {
 // ApplyReplicated applies one frame the cluster has agreed on. A frame is one transaction on the
 // node that took the write, and applying it inside one transaction here is what keeps a MULTI
 // atomic on every node.
+//
+// Exported for internal/cluster to reach across the package boundary, and outside the v1
+// compatibility promise: see content/docs/compatibility.md.
 func (s *Store) ApplyReplicated(lines [][]byte) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

@@ -1,0 +1,124 @@
+# Exported API surface promised for v1 - see content/docs/compatibility.md.
+# A line changed or removed below is a breaking change and needs a major version.
+# A line added is a new promise: it cannot be taken back within v1.
+# Regenerate deliberately: go test -run TestPublicAPISurface . -update
+# ---
+==== kvs.go ====
+package kvs
+
+var (
+	ErrKeyNotFound	= errors.New("key not found")
+
+	ErrNoCodec	= errors.New("no codec set")
+)
+
+type Entry struct {
+	Value		interface{}
+	ExpiresAt	time.Time
+}
+
+type Store struct {
+	// contains filtered or unexported fields
+}
+
+func NewStore() *Store
+
+func Open(dir string, codec Codec) (*Store, error)
+
+func (s *Store) Close() error
+
+func (s *Store) Read(fn func(tx *ReadTx) error) error
+
+func (s *Store) Write(fn func(tx *Tx) error) error
+
+func (s *Store) Speculate(fn func(tx *Tx) error) ([][]byte, error)
+
+func (s *Store) Snapshot() ([][]byte, error)
+
+func (s *Store) Watch(keys ...string) *Watch
+
+func (s *Store) Get(key string) (interface{}, error)
+
+func (s *Store) Put(key string, value interface{}) error
+
+func (s *Store) Delete(key string) error
+
+type ReadTx struct {
+	// contains filtered or unexported fields
+}
+
+func (tx *ReadTx) Now() time.Time
+
+func (tx *ReadTx) Get(key string) (Entry, bool)
+
+func (tx *ReadTx) Keys() []string
+
+func (tx *ReadTx) SortedKeys() []string
+
+func (tx *ReadTx) Len() int
+
+func (tx *ReadTx) Expiring() int
+
+type Tx struct {
+	ReadTx
+	// contains filtered or unexported fields
+}
+
+func (tx *Tx) Get(key string) (Entry, bool)
+
+func (tx *Tx) Set(key string, entry Entry)
+
+func (tx *Tx) Delete(key string) bool
+
+func (tx *Tx) Flush()
+
+type Watch struct {
+	// contains filtered or unexported fields
+}
+
+func (w *Watch) Conflicted() bool
+
+func (w *Watch) Close()
+
+
+==== log.go ====
+package kvs
+
+var ErrUnsupportedValue = errors.New("unsupported value type")
+
+type Codec interface {
+	Encode(value interface{}) ([]byte, error)
+	Decode(data []byte) (interface{}, error)
+
+	Clone(value interface{}) interface{}
+}
+
+type StringCodec struct{}
+
+func (StringCodec) Encode(value interface{}) ([]byte, error)
+
+func (StringCodec) Decode(data []byte) (interface{}, error)
+
+func (StringCodec) Clone(value interface{}) interface{}
+
+
+==== replication.go ====
+package kvs
+
+var ErrNotLeader = errors.New("not the leader")
+
+type NotLeaderError struct {
+	Leader string
+}
+
+func (e *NotLeaderError) Error() string
+
+func (e *NotLeaderError) Is(target error) bool
+
+func (s *Store) SetReplicator(replicate func(fn func(tx *Tx) error) error)
+
+func (s *Store) SetCodec(codec Codec)
+
+func (s *Store) ReplaceWith(snapshot [][]byte) error
+
+func (s *Store) ApplyReplicated(lines [][]byte) error

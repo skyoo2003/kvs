@@ -170,6 +170,13 @@ What that does and does not promise:
 The [durability and clustering docs](https://skyoo2003.github.io/kvs/docs/clustering/) go through
 each of these, and what to do about them.
 
+## Compatibility
+
+What `v1` promises not to break, and what it deliberately leaves out, is on the
+[compatibility page](https://skyoo2003.github.io/kvs/docs/compatibility/). Read it before
+pinning kvs, and before opening a port: kvs has no authentication, no authorization, and no
+TLS, and HTTP and gRPC listen on every interface by default.
+
 ## Documentation
 
 Full documentation is available at [skyoo2003.github.io/kvs](https://skyoo2003.github.io/kvs).

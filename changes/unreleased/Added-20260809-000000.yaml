@@ -1,0 +1,3 @@
+kind: Added
+body: A compatibility page states what v1 promises not to break, what it leaves out, and the trust boundary kvs assumes; the exported Go surface is pinned in testdata/api-surface.txt and checked by a test, so it cannot widen or narrow unnoticed
+time: 2026-08-09T00:00:00.000000+09:00
