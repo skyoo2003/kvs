@@ -47,7 +47,7 @@ surfacing later. What a cluster does and does not promise is on the
 
 ### Configuration without flags
 
-Every flag has a config file and environment equivalent. The RESP password has **only**
+Every `serve` flag has a config file and environment equivalent. The RESP password has **only**
 those: a credential passed as an argument is visible to anything that can list processes.
 
 | Setting | Config key | Environment |

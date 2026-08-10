@@ -34,8 +34,10 @@ to answer it.
 
 ### The command line
 
-Every flag on the [CLI Usage](../cli/) page keeps its name, its meaning, and its default,
-along with the config-file key and environment variable that set it. `kvs serve` with no flags
+Every flag on the [CLI Usage](../cli/) page keeps its name, its meaning, and its default. Each
+`kvs serve` setting keeps the config-file key and environment variable that set it too;
+`--config`, `--version`, and `--help` have neither, because the CLI answers those itself rather
+than passing them to the server. `kvs serve` with no flags
 keeps asking for `:3456` for HTTP, `:3457` for gRPC, and `127.0.0.1:6379` for RESP — the
 addresses are the promise, not that each one binds, because a default RESP port already taken
 is logged and skipped rather than being fatal. `kvs version` keeps printing a version.

@@ -174,8 +174,8 @@ each of these, and what to do about them.
 
 What `v1` promises not to break, and what it deliberately leaves out, is on the
 [compatibility page](https://skyoo2003.github.io/kvs/docs/compatibility/). Read it before
-pinning kvs, and before opening a port: kvs has no authentication, no authorization, and no
-TLS, and HTTP and gRPC listen on every interface by default.
+pinning kvs, and before opening a port: kvs has no authorization and no TLS, only the RESP
+listener can be given a password, and HTTP and gRPC listen on every interface by default.
 
 ## Documentation
 
