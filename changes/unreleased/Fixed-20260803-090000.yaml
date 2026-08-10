@@ -1,3 +1,0 @@
-kind: Fixed
-body: Store.Snapshot and Store.Speculate now return ErrNoCodec instead of panicking on a nil dereference when no Codec has been set; an empty keyspace has nothing to encode and still succeeds, which is why the crash only showed up once a key existed
-time: 2026-08-03T09:00:00.000000+09:00

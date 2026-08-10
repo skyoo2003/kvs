@@ -1,5 +1,0 @@
-kind: Misc
-body: Migrate golangci-lint config to v2 and pin the linter to v2.12.2 in CI
-time: 2026-07-30T08:09:30.503608+09:00
-custom:
-    Issue: "229"

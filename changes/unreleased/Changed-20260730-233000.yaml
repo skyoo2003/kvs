@@ -1,5 +1,0 @@
-kind: Changed
-body: RESP SCAN, HSCAN, SSCAN, and ZSCAN now page their walk, WATCH tracks only the keys it was given, lists cost O(1) at both ends, and expired keys are reclaimed by a sampling sweep
-time: 2026-07-30T23:30:00.000000+09:00
-custom:
-    Issue: "232"
