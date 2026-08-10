@@ -42,7 +42,7 @@ func NewHTTPHandler(store *kvs.Store) http.Handler {
 
 func (h *httpHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		w.WriteHeader(http.StatusMethodNotAllowed)
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
@@ -64,7 +64,7 @@ func (h *httpHandler) handleKey(w http.ResponseWriter, r *http.Request) {
 	case http.MethodDelete:
 		h.handleDelete(w, key)
 	default:
-		w.WriteHeader(http.StatusMethodNotAllowed)
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 	}
 }
 

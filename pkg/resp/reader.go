@@ -1,4 +1,9 @@
 // Package resp implements the RESP2 wire protocol spoken by Redis and Valkey clients.
+//
+// It exists for the server in this module to speak that protocol, not as a RESP library for
+// other programs, and is outside the v1 compatibility promise: see
+// content/docs/compatibility.md. The protocol kvs answers on the wire is promised; this Go
+// package is not.
 package resp
 
 import (

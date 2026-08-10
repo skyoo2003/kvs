@@ -67,6 +67,34 @@ func TestHTTPHandlerPutGetDelete(t *testing.T) {
 	}
 }
 
+// TestHTTPHandlerRejectsUnsupportedMethod covers the promise the HTTP API page makes about every
+// error carrying a JSON body, which a bare WriteHeader would break for 405 alone.
+func TestHTTPHandlerRejectsUnsupportedMethod(t *testing.T) {
+	for _, target := range []string{"/healthz", "/v1/keys/language"} {
+		handler := NewHTTPHandler(kvs.NewStore())
+		req := newTestRequest(t, http.MethodPost, target, http.NoBody)
+		res := httptest.NewRecorder()
+
+		handler.ServeHTTP(res, req)
+
+		if res.Code != http.StatusMethodNotAllowed {
+			t.Errorf("POST %s status = %d, want %d", target, res.Code, http.StatusMethodNotAllowed)
+		}
+		if got := res.Header().Get("Content-Type"); got != "application/json" {
+			t.Errorf("POST %s content type = %q, want application/json", target, got)
+		}
+
+		var body errorResponse
+		if err := json.Unmarshal(res.Body.Bytes(), &body); err != nil {
+			t.Errorf("POST %s json.Unmarshal(%q) error = %v", target, res.Body.String(), err)
+			continue
+		}
+		if body.Error == "" {
+			t.Errorf("POST %s error message is empty", target)
+		}
+	}
+}
+
 func TestHTTPHandlerMissingKey(t *testing.T) {
 	handler := NewHTTPHandler(kvs.NewStore())
 	req := newTestRequest(t, http.MethodGet, "/v1/keys/missing", http.NoBody)
