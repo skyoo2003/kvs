@@ -21,7 +21,8 @@
 * The durability and clustering page now carries measured numbers from a four hour run under load with a node stopped every thirty seconds and kept down for ten - 329,631 acknowledged writes, 111,516 of them taken while a node was gone, and none of them lost across 479 restarts - along with 51 bytes of append log per write, the Raft log a node too busy restarting never truncates, and a make soak target that reproduces all of it ([#246](https://github.com/skyoo2003/kvs/issues/246))
 * The release page now covers what one tag actually produces, the checks worth running before pushing it, and an upgrade section measured by running v0.1.1 and v1 side by side - the library, the CLI, and gRPC unchanged, an HTTP 405 now carrying a JSON body, a RESP listener appearing on loopback, and no data directory to migrate because v0.1.1 never wrote one ([#248](https://github.com/skyoo2003/kvs/issues/248))
 ### Misc
-* Migrate golangci-lint config to v2 and pin the linter to v2.12.2 in CI ([#229](https://github.com/skyoo2003/kvs/issues/229))## [v0.1.1](https://github.com/skyoo2003/kvs/releases/tag/v0.1.1) - 2026-04-20
+* Migrate golangci-lint config to v2 and pin the linter to v2.12.2 in CI ([#229](https://github.com/skyoo2003/kvs/issues/229))
+## [v0.1.1](https://github.com/skyoo2003/kvs/releases/tag/v0.1.1) - 2026-04-20
 
 ### Changed
 * Improve open-source project infrastructure and documentation

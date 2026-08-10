@@ -29,6 +29,9 @@ things are worth looking for, both of which have happened here:
 - Changes that cancel out. Something added and removed again between two tags is not news to
   anyone upgrading, and a release note saying both is worse than saying neither. The test is
   whether someone on the previous release can observe the difference.
+- The previous version's heading glued to the last bullet of the new one. `changie batch` writes
+  the version file without a trailing newline and `changie merge` concatenates verbatim, which
+  costs the release below its heading. Give the file its newline and merge again.
 
 Commit the batched file and the changelog, merge to `main`, then:
 
@@ -81,7 +84,7 @@ go in the same change — while it is there, it wins and the migration never fir
 
 | Artifact | Where |
 |---|---|
-| Archives — darwin, linux, windows × 386, amd64, arm64, armv7 (nine in total) | GitHub release |
+| Archives — darwin `amd64` `arm64`, linux `386` `amd64` `arm64` `armv7`, windows `386` `amd64` `arm64` (nine) | GitHub release |
 | `CHECKSUMS` — sha256 for every archive | GitHub release |
 | Container image | `ghcr.io/skyoo2003/kvs`, tagged `v1.2.3-alpine`, `v1.2-alpine`, `v1-alpine`, `latest-alpine` |
 | Homebrew cask | `skyoo2003/homebrew-tap`, installed with `brew install skyoo2003/tap/kvs` |
