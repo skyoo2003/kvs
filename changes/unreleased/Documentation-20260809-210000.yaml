@@ -1,0 +1,5 @@
+kind: Documentation
+body: The durability and clustering page now carries measured numbers from a four hour run under load with a node stopped every thirty seconds and kept down for ten - 329,631 acknowledged writes, 111,516 of them taken while a node was gone, and none of them lost across 479 restarts - along with 51 bytes of append log per write, the Raft log a node too busy restarting never truncates, and a make soak target that reproduces all of it
+time: 2026-08-09T21:00:00.000000+09:00
+custom:
+    Issue: "246"

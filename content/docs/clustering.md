@@ -35,6 +35,15 @@ the file without them.
 keyspace in memory, so rewriting the log costs nothing extra at that moment and needs no
 background worker. A long-running process grows its log without bound in the meantime.
 
+How fast is worth knowing before you size a disk. Four hours of continuous writes over a
+thousand keys — 1,726,455 of them, so every key was overwritten some seventeen hundred times —
+left an **87MB log for a keyspace that never exceeded a thousand entries**, at **51 bytes per
+write**. That last figure is this workload's, not yours: a record carries the key and the
+encoded value, so your own average record is what scales it. The shape is what carries over —
+the log grows with writes, not with time and not with how much data you are keeping. Memory
+settled over the same four hours, 1.11MB to 1.22MB, so it is the disk that needs watching, and
+a restart is what reclaims it.
+
 **One node means one disk.** Durability is not availability: a lost disk is lost data, and a
 stopped process is a stopped service. That is what clustering is for.
 
@@ -68,6 +77,19 @@ eventual: the price is that every write pays one consensus round.
 
 **Failover needs no person.** Stop the leader and the survivors elect a replacement on their
 own.
+
+**Nothing acknowledged was lost over four hours of being knocked down.** A three-node cluster
+took 329,631 writes with one node stopped every thirty seconds and left down for ten — 479
+restarts — and **111,516 of those writes were taken while a node was gone**. Each node that came
+back was held against the latest acknowledged value of every key before the load was allowed to
+write again, and all three were checked once more at the end. Nothing was missing and nothing
+crashed. The check is per key rather than per write: an interval that gets through more writes
+than there are keys overwrites some of its own, and only the later value is left to compare, so
+the run reports how many acknowledged writes were superseded before a check could see them.
+Writes were
+refused slightly more often than they were taken, which is what asking a follower looks like —
+the refusal names the leader — rather than anything being lost: only a write that returns is a
+write kvs claims to have. `make soak SOAK=4h` is that run.
 
 ### What it does not
 
@@ -114,6 +136,25 @@ liveness checks; treat them as "this process is up", not "this node is useful".
 **No sharding.** Every node holds the whole keyspace, so the cluster is as large as one node can
 hold. Writes are serialized through the leader, one consensus round each: this is built for
 staying up, not for throughput.
+
+**A node that restarts faster than it can snapshot never truncates its log.** Raft discards log
+entries only once a snapshot covers them. It considers taking one every two to four minutes, and
+takes it only if 8,192 entries have arrived since the last — at the write rate above that is
+another five or six minutes — then keeps the most recent 10,240 entries anyway. In the run above
+each node was going down every ninety seconds and so never lived long enough to take one:
+after four hours every node held **126MB of Raft log for a thousand keys**, none of it
+discardable. A node in a crash loop fills its disk while looking like it is merely restarting.
+A node that stays up snapshots normally and none of this arises.
+
+**Memory holds under that churn, unless the node comes back instantly.** Across those four
+hours the heap of the one process holding all three nodes ended where it began, 4.3MB once
+settled and 4.0MB after 479 restarts. An earlier version of the same run restarted each node
+the moment it stopped rather than leaving it down, and that one climbed from 10MB to 139MB over
+four hours; a heap profile put more than half of what was still reachable in Raft's own network
+transport, which holds a 256KB read buffer and a 256KB write buffer per connection, while the
+only frame belonging to kvs held 544KB — the thousand keys themselves. Ten seconds down was
+enough for none of that to accumulate. It is the process that crash-loops without pause that
+grows, and it wants a memory limit as much as it wants the disk headroom above.
 
 ## Configuration notes
 
