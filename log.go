@@ -10,6 +10,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/skyoo2003/kvs/internal/datadir"
 )
 
 // ErrUnsupportedValue is what a Codec returns for a value it cannot encode. Failing the write
@@ -57,8 +59,10 @@ const (
 	opFlush = "flush"
 )
 
-// logName is the file the append log lives in, inside the directory Open was given.
-const logName = "kvs.log"
+// logName is the file the append log lives in, inside the directory Open was given. The name
+// belongs to datadir because that package has to recognize a directory holding one, and two
+// spellings of it would mean a log this build writes and the next one fails to notice.
+const logName = datadir.LogName
 
 // record is one durable change. Value holds the encoded form and value the original: encoding
 // is deferred to commit so that a value the codec cannot handle fails the write that stored
@@ -192,7 +196,7 @@ func (l *appendLog) rewrite(lines frame) error {
 	}
 	// The rename itself has to reach the disk, or a crash can leave the directory naming
 	// neither the old file nor the new one.
-	if syncErr := syncDir(dir); syncErr != nil {
+	if syncErr := datadir.SyncDir(dir); syncErr != nil {
 		return syncErr
 	}
 
@@ -236,21 +240,6 @@ func writeLines(file *os.File, lines frame) error {
 
 	if err := file.Sync(); err != nil {
 		return fmt.Errorf("flush log: %w", err)
-	}
-
-	return nil
-}
-
-func syncDir(dir string) error {
-	//nolint:gosec // The path is the data directory the operator named; that is the feature.
-	handle, err := os.Open(dir)
-	if err != nil {
-		return fmt.Errorf("open data dir: %w", err)
-	}
-	defer func() { _ = handle.Close() }()
-
-	if err := handle.Sync(); err != nil {
-		return fmt.Errorf("flush data dir: %w", err)
 	}
 
 	return nil

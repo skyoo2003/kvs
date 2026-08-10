@@ -5,8 +5,11 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/skyoo2003/kvs/internal/datadir"
 )
 
 func TestStringCodecRoundTrip(t *testing.T) {
@@ -202,6 +205,44 @@ func TestOpenDefaultsToStringCodec(t *testing.T) {
 }
 
 // A store with no log is still the default, and must not have gained a file or a failure.
+// A data directory another version wrote has to stop Open before the replay, and say so. The
+// replay reading someone else's bytes is the failure this check exists to prevent, and it
+// would arrive looking like corruption.
+func TestOpenRefusesADirectoryFromAnotherFormat(t *testing.T) {
+	dir := t.TempDir()
+
+	store, err := Open(dir, nil)
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	if err := store.Put("language", "go"); err != nil {
+		t.Fatalf("Put() error = %v", err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+
+	format := filepath.Join(dir, datadir.FormatName)
+	if err := os.WriteFile(format, []byte("2\n"), 0o600); err != nil {
+		t.Fatalf("write format: %v", err)
+	}
+
+	_, reopenErr := Open(dir, nil)
+	if reopenErr == nil {
+		t.Fatal("Open() error = nil, want a refusal")
+	}
+
+	if !errors.Is(reopenErr, datadir.ErrFormat) {
+		t.Errorf("errors.Is(err, datadir.ErrFormat) = false, err = %v", reopenErr)
+	}
+
+	for _, want := range []string{"format 2", "format 1"} {
+		if !strings.Contains(reopenErr.Error(), want) {
+			t.Errorf("message %q does not carry %q", reopenErr.Error(), want)
+		}
+	}
+}
+
 func TestNewStoreWritesNothing(t *testing.T) {
 	dir := t.TempDir()
 

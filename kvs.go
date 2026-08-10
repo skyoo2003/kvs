@@ -14,6 +14,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/skyoo2003/kvs/internal/datadir"
 )
 
 var (
@@ -84,6 +86,13 @@ func NewStore() *Store {
 func Open(dir string, codec Codec) (*Store, error) {
 	if codec == nil {
 		codec = StringCodec{}
+	}
+
+	// Before anything is read: a directory written by a version whose format this build does
+	// not know has to stop here, where the reason can still be explained, rather than during
+	// the replay where it would look like corruption.
+	if err := datadir.Ensure(dir); err != nil {
+		return nil, err
 	}
 
 	lg, err := openLog(dir)

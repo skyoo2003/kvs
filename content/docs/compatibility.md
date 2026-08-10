@@ -74,10 +74,12 @@ package is not.
 **Anything under `internal/`.** The Go toolchain already stops you importing it; this is the
 same statement in words.
 
-**The on-disk format.** The append log in `--data-dir`, and the Raft directory beside it, carry
-no format version yet. Data written by one release is not promised to be readable by another.
-Until that changes, treat an upgrade as: drain, start the new version against an empty
-directory, reload.
+**The on-disk format.** A data directory carries a `format` file naming the version that wrote
+it, and kvs refuses to start on a directory whose version it does not recognize rather than
+reading it and hoping. That refusal is the promise; the contents are not. Data written by one
+release is not promised to be readable by another, and kvs does not convert between formats. An
+upgrade that raises the format means: drain, start the new version against an empty directory,
+load the data again.
 
 **Performance.** Throughput, latency, and memory are not part of the promise. kvs is built for
 not losing writes, not for being fast, and a release may trade one for the other.

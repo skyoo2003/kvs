@@ -22,6 +22,7 @@ import (
 	raftboltdb "github.com/hashicorp/raft-boltdb/v2"
 
 	"github.com/skyoo2003/kvs"
+	"github.com/skyoo2003/kvs/internal/datadir"
 )
 
 const (
@@ -87,7 +88,13 @@ type Node struct {
 
 // Start brings this node up and, if asked, starts a new cluster around it.
 func Start(cfg Config, store *kvs.Store) (*Node, error) {
-	dir := filepath.Join(cfg.DataDir, "raft")
+	// A clustered node never goes through kvs.Open, so the format check has to happen here too
+	// or the Raft store would be handed a directory nobody vouched for.
+	if err := datadir.Ensure(cfg.DataDir); err != nil {
+		return nil, err
+	}
+
+	dir := filepath.Join(cfg.DataDir, datadir.RaftName)
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return nil, fmt.Errorf("create raft dir: %w", err)
 	}
