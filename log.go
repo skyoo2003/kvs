@@ -196,7 +196,7 @@ func (l *appendLog) rewrite(lines frame) error {
 	}
 	// The rename itself has to reach the disk, or a crash can leave the directory naming
 	// neither the old file nor the new one.
-	if syncErr := syncDir(dir); syncErr != nil {
+	if syncErr := datadir.SyncDir(dir); syncErr != nil {
 		return syncErr
 	}
 
@@ -240,21 +240,6 @@ func writeLines(file *os.File, lines frame) error {
 
 	if err := file.Sync(); err != nil {
 		return fmt.Errorf("flush log: %w", err)
-	}
-
-	return nil
-}
-
-func syncDir(dir string) error {
-	//nolint:gosec // The path is the data directory the operator named; that is the feature.
-	handle, err := os.Open(dir)
-	if err != nil {
-		return fmt.Errorf("open data dir: %w", err)
-	}
-	defer func() { _ = handle.Close() }()
-
-	if err := handle.Sync(); err != nil {
-		return fmt.Errorf("flush data dir: %w", err)
 	}
 
 	return nil

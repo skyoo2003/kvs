@@ -101,6 +101,13 @@ func Ensure(dir string) error {
 		return fmt.Errorf("read data dir format: %w", err)
 	}
 
+	if len(raw) > maxFormatBytes {
+		// A file longer than the cap holds something other than a version, whatever its first
+		// bytes look like, so trusting the prefix would accept a directory on the strength of the
+		// part that happened to fit. Only that prefix is quoted back: the rest was never read.
+		return &FormatError{Dir: dir, Raw: strings.TrimSpace(string(raw[:maxFormatBytes])) + "..."}
+	}
+
 	text := strings.TrimSpace(string(raw))
 
 	if found, convErr := strconv.Atoi(text); convErr != nil || found != Version {
@@ -115,8 +122,9 @@ func Ensure(dir string) error {
 // refusal that says so, not an allocation the size of whatever was put there.
 const maxFormatBytes = 64
 
-// readFormat returns what the format file holds, or as much of it as could be a version. The
-// caller tells a missing file from an unreadable one, so the error is returned unwrapped.
+// readFormat returns what the format file holds, or as much of it as could be a version plus one
+// byte, which is how the caller tells a marker that ran on from one that fit. The caller also
+// tells a missing file from an unreadable one, so the error is returned unwrapped.
 func readFormat(path string) ([]byte, error) {
 	//nolint:gosec // The path is the data directory the operator named; that is the feature.
 	file, err := os.Open(path)
@@ -125,7 +133,7 @@ func readFormat(path string) ([]byte, error) {
 	}
 	defer func() { _ = file.Close() }()
 
-	return io.ReadAll(io.LimitReader(file, maxFormatBytes))
+	return io.ReadAll(io.LimitReader(file, maxFormatBytes+1))
 }
 
 // holdsData reports whether the directory already carries a keyspace. It looks for the two
@@ -133,7 +141,10 @@ func readFormat(path string) ([]byte, error) {
 // freshly mounted volume is not empty — lost+found is there before kvs ever runs.
 func holdsData(dir string) (bool, error) {
 	for _, name := range []string{LogName, RaftName} {
-		switch _, err := os.Stat(filepath.Join(dir, name)); {
+		// Lstat rather than Stat: a symlink whose target is a volume that is not mounted yet is
+		// still an entry kvs put there, and following it would report the data as absent, stamp
+		// the directory, and accept an unversioned keyspace once the volume came back.
+		switch _, err := os.Lstat(filepath.Join(dir, name)); {
 		case err == nil:
 			return true, nil
 
@@ -172,7 +183,7 @@ func stamp(path string) error {
 	// The rename is a directory entry, and syncing the file did not make it durable. Without
 	// this a crash can leave data that was flushed afterwards next to no marker at all, which
 	// reads as a directory written before kvs versioned them and is refused from then on.
-	return syncDir(dir)
+	return SyncDir(dir)
 }
 
 func writeAndSync(file *os.File, text string) error {
@@ -191,7 +202,11 @@ func writeAndSync(file *os.File, text string) error {
 	return file.Close()
 }
 
-func syncDir(dir string) error {
+// SyncDir flushes the directory's own entries, which syncing a file inside it does not cover.
+// Anything that renames a file into a data directory has to call it, or a crash can leave the
+// directory naming neither the old file nor the new one. It lives here because the directory is
+// this package's business, and two copies would be two places to fix.
+func SyncDir(dir string) error {
 	//nolint:gosec // The path is the data directory the operator named; that is the feature.
 	handle, err := os.Open(dir)
 	if err != nil {

@@ -51,14 +51,25 @@ func TestEnsureStampsANewDirectory(t *testing.T) {
 func TestEnsureRefusesWhenItCannotTellWhetherDataIsThere(t *testing.T) {
 	dir := t.TempDir()
 
-	// A symlink pointing at itself is a path that exists and cannot be stat'd. It stands in for
+	// A directory that cannot be searched is one whose contents cannot be stat'd. It stands in for
 	// the transient filesystem error this guards against, which a test cannot arrange directly.
-	link := filepath.Join(dir, datadir.LogName)
-	if err := os.Symlink(link, link); err != nil {
-		t.Skipf("symlinks unavailable here: %v", err)
+	if err := os.Chmod(dir, 0); err != nil {
+		t.Skipf("cannot drop directory permissions here: %v", err)
+	}
+
+	if _, probeErr := os.Lstat(filepath.Join(dir, datadir.LogName)); errors.Is(probeErr, os.ErrNotExist) {
+		_ = searchable(dir)
+		t.Skip("this filesystem still answers for an unsearchable directory")
 	}
 
 	err := datadir.Ensure(dir)
+
+	// Restored before the assertions below, which have to be able to look inside again — and
+	// before t.TempDir cleans up, which cannot remove what it cannot enter.
+	if chmodErr := searchable(dir); chmodErr != nil {
+		t.Fatalf("restore permissions: %v", chmodErr)
+	}
+
 	if err == nil {
 		t.Fatal("Ensure() error = nil, want a refusal")
 	}
@@ -84,8 +95,35 @@ func TestEnsureBoundsWhatItReadsFromTheFormatFile(t *testing.T) {
 		t.Fatalf("Ensure() error = %v, want a FormatError", err)
 	}
 
-	if len(formatErr.Raw) > 64 {
-		t.Errorf("Raw is %d bytes long, so the whole file was read into memory", len(formatErr.Raw))
+	// The read cap plus the marker saying the file went on, and nothing like the file itself.
+	if quoted := len(formatErr.Raw); quoted > 64+len("...") {
+		t.Errorf("Raw is %d bytes long, so the whole file was read into memory", quoted)
+	}
+}
+
+// Data behind a symlink whose target is a volume that is not mounted yet is data all the same.
+// Stamping the directory would accept it as this format the moment the volume came back.
+func TestEnsureRefusesADanglingLegacyDataLink(t *testing.T) {
+	dir := t.TempDir()
+
+	link := filepath.Join(dir, datadir.LogName)
+	if err := os.Symlink(filepath.Join(dir, "volume", datadir.LogName), link); err != nil {
+		t.Skipf("symlinks unavailable here: %v", err)
+	}
+
+	err := datadir.Ensure(dir)
+
+	var formatErr *datadir.FormatError
+	if !errors.As(err, &formatErr) {
+		t.Fatalf("Ensure() error = %v, want a FormatError", err)
+	}
+
+	if !formatErr.Missing {
+		t.Errorf("Missing = false, want the refusal for data written before versioning")
+	}
+
+	if _, statErr := os.Stat(filepath.Join(dir, datadir.FormatName)); statErr == nil {
+		t.Error("the directory was stamped over data whose volume is not mounted")
 	}
 }
 
@@ -144,6 +182,16 @@ func TestEnsureRefusesADirectoryItCannotRead(t *testing.T) {
 				writeFile(t, filepath.Join(dir, datadir.FormatName), "")
 			},
 			wants: []string{`holding ""`, "not a version number"},
+		},
+		{
+			// A marker whose first bytes read as this version but which goes on past what a
+			// version can be. Taking the prefix for the whole would accept a replaced file.
+			name: "a marker that runs past the read cap",
+			arrange: func(t *testing.T, dir string) {
+				t.Helper()
+				writeFile(t, filepath.Join(dir, datadir.FormatName), "1"+strings.Repeat(" ", 63)+"7")
+			},
+			wants: []string{`"1..."`, "not a version number"},
 		},
 		{
 			name: "an append log written before versioning",
@@ -218,6 +266,14 @@ func writeFormat(t *testing.T, dir, text string) {
 	t.Helper()
 
 	writeFile(t, filepath.Join(dir, datadir.FormatName), text+"\n")
+}
+
+// searchable puts back the mode t.TempDir made the directory with, so a test that took it away
+// can look inside again and the cleanup can still remove it.
+//
+//nolint:gosec // A directory has to carry its execute bit or nothing can enter it, this test included.
+func searchable(dir string) error {
+	return os.Chmod(dir, 0o700)
 }
 
 func writeFile(t *testing.T, path, text string) {
