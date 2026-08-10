@@ -80,10 +80,13 @@ own.
 
 **Nothing acknowledged was lost over four hours of being knocked down.** A three-node cluster
 took 329,631 writes with one node stopped every thirty seconds and left down for ten — 479
-restarts — and **111,516 of those writes were taken while a node was gone**. Each node that
-came back was held against every acknowledged value before the load was allowed to write again,
-so a write that went missing could not be covered up by the next round overwriting its key; all
-three were checked once more at the end. Nothing was missing and nothing crashed. Writes were
+restarts — and **111,516 of those writes were taken while a node was gone**. Each node that came
+back was held against the latest acknowledged value of every key before the load was allowed to
+write again, and all three were checked once more at the end. Nothing was missing and nothing
+crashed. The check is per key rather than per write: an interval that gets through more writes
+than there are keys overwrites some of its own, and only the later value is left to compare, so
+the run reports how many acknowledged writes were superseded before a check could see them.
+Writes were
 refused slightly more often than they were taken, which is what asking a follower looks like —
 the refusal names the leader — rather than anything being lost: only a write that returns is a
 write kvs claims to have. `make soak SOAK=4h` is that run.
@@ -135,8 +138,10 @@ hold. Writes are serialized through the leader, one consensus round each: this i
 staying up, not for throughput.
 
 **A node that restarts faster than it can snapshot never truncates its log.** Raft discards log
-entries only once a snapshot covers them, and it takes one every two to four minutes. In the run
-above each node was going down every ninety seconds and so never lived long enough to take one:
+entries only once a snapshot covers them. It considers taking one every two to four minutes, and
+takes it only if 8,192 entries have arrived since the last — at the write rate above that is
+another five or six minutes — then keeps the most recent 10,240 entries anyway. In the run above
+each node was going down every ninety seconds and so never lived long enough to take one:
 after four hours every node held **126MB of Raft log for a thousand keys**, none of it
 discardable. A node in a crash loop fills its disk while looking like it is merely restarting.
 A node that stays up snapshots normally and none of this arises.
