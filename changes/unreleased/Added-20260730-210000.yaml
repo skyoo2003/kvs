@@ -1,5 +1,0 @@
-kind: Added
-body: Redis/Valkey compatible RESP2 server on 127.0.0.1:6379, sharing one keyspace with the HTTP and gRPC APIs; it steps aside if the port is taken, holds at most 10000 connections, and bounds one transaction's queue at 64MiB so a single client cannot exhaust memory
-time: 2026-07-30T21:00:00.000000+09:00
-custom:
-    Issue: "232"

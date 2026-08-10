@@ -1,10 +1,14 @@
 package main
 
 import (
+	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/spf13/viper"
 
+	"github.com/skyoo2003/kvs/internal/datadir"
 	"github.com/skyoo2003/kvs/internal/server"
 )
 
@@ -161,5 +165,32 @@ func TestResolveServeConfigFlagsOverrideViper(t *testing.T) {
 	got := resolveServeConfig(cmd.Flags())
 	if got.HTTPAddr != "127.0.0.1:18080" || got.GRPCAddr != "127.0.0.1:19090" {
 		t.Fatalf("resolveServeConfig() = %+v, want flag values", got)
+	}
+}
+
+// Upgrading to a build that reads a different on-disk format is the one upgrade path kvs
+// promises anything about, and the promise is a refusal that says what to do. The datadir
+// package tests the refusal itself; this tests that it reaches whoever ran the command, which is
+// where the sentence is actually read. Nothing binds a port: serve.go opens the store before it
+// listens, so the command is over before the addresses matter.
+func TestServeRefusesADataDirItCannotRead(t *testing.T) {
+	dir := t.TempDir()
+
+	const foreign = "999"
+	if err := osWriteFile(filepath.Join(dir, datadir.FormatName), []byte(foreign+"\n")); err != nil {
+		t.Fatalf("write %s error = %v", datadir.FormatName, err)
+	}
+
+	_, _, err := runCLI(t, "serve", "--data-dir", dir)
+	if err == nil {
+		t.Fatal("serve --data-dir on a foreign format = nil, want a refusal")
+	}
+
+	// The operator has to be able to tell which directory, what it holds, and what this build
+	// would have read, or the message is not an upgrade instruction.
+	for _, want := range []string{dir, foreign, strconv.Itoa(datadir.Version)} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("serve --data-dir error = %q, want it to mention %q", err, want)
+		}
 	}
 }

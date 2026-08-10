@@ -17,7 +17,7 @@ KVS follows a **BDFL (Benevolent Dictator for Life)** model:
 - Releases follow [Semantic Versioning](https://semver.org)
 - The project lead determines release scope and timing
 - Changelog is managed with [Changie](https://github.com/miniscruff/changie)
-- See [RELEASE.md](docs/RELEASE.md) for the full release workflow
+- See [the release process](https://skyoo2003.github.io/kvs/docs/release/) for the full release workflow
 
 ## Contributing
 

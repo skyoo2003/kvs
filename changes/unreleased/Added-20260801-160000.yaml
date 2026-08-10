@@ -1,5 +1,0 @@
-kind: Added
-body: The cjson library inside a script, so cjson.encode and cjson.decode work under EVAL instead of failing on a nil global; a JSON null decodes to cjson.null rather than nil, so it does not end the array it sits in
-time: 2026-08-01T16:00:00.000000+09:00
-custom:
-    Issue: "232"

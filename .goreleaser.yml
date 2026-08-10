@@ -55,10 +55,15 @@ checksum:
   algorithm: sha256
   name_template: 'CHECKSUMS'
 
-# Publishes Formula/kvs.rb to skyoo2003/homebrew-tap. The token comes from a
+# Publishes Casks/kvs.rb to skyoo2003/homebrew-tap. The token comes from a
 # GitHub App installed only on that repository: the job's own GITHUB_TOKEN
 # cannot write to another repo.
-brews:
+#
+# A cask rather than a formula because GoReleaser deprecated `brews`: a formula that installs a
+# pre-built binary is what a cask is for. `brew install skyoo2003/tap/kvs` keeps working, and the
+# tap needs a tap_migrations.json entry so anyone holding the old formula moves over on upgrade
+# instead of being told it is gone.
+homebrew_casks:
 - ids:
   - kvs
   repository:
@@ -68,10 +73,15 @@ brews:
   homepage: "https://github.com/skyoo2003/kvs"
   description: "A key-value store you can run as a server or import as a Go module"
   license: "MIT"
-  install: |
-    bin.install "kvs"
-  test: |
-    assert_match version.to_s, shell_output("#{bin}/kvs -v")
+  # Nothing signs or notarizes these binaries, so Gatekeeper quarantines what the cask staged and
+  # the first run dies on a dialog rather than an error. Stripping the attribute is what makes an
+  # unsigned cask runnable; it is not an optional nicety.
+  hooks:
+    post:
+      install: |
+        if OS.mac?
+          system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/kvs"]
+        end
 
 dockers_v2:
 - images:

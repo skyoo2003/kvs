@@ -1,5 +1,0 @@
-kind: Fixed
-body: An HTTP 405 now carries the same JSON error body as every other HTTP error, instead of an empty response the documented contract did not allow
-time: 2026-08-10T10:00:00.000000+09:00
-custom:
-    Issue: "244"

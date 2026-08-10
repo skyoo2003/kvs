@@ -1,5 +1,0 @@
-kind: Added
-body: Lua scripting with EVAL, EVALSHA, and SCRIPT LOAD/EXISTS/FLUSH; a script runs sandboxed under one write lock, so its redis.call sequence is atomic, and gives up after 5 seconds rather than hold the store
-time: 2026-08-01T12:00:00.000000+09:00
-custom:
-    Issue: "232"
