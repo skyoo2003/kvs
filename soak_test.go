@@ -19,7 +19,8 @@ const soakKeys = 1000
 
 // soakSizeCap stops the run before it can fill the disk it is measuring. Reaching it is a
 // result rather than a failure: it says how long a process writing this fast has before the
-// log is that large.
+// log is that large. It assumes the temporary directory has that much to spare - a smaller
+// filesystem fails the write instead, which says so plainly enough.
 const soakSizeCap = 2 << 30
 
 // soakSizeEvery is how many writes pass between size checks. Statting the log on every write
@@ -89,6 +90,14 @@ func reportGrowth(t *testing.T, dir string, writes int, elapsed time.Duration, c
 // something holding on to every write.
 func assertHeapSettled(t *testing.T, warmup, final uint64) {
 	t.Helper()
+
+	// A run that hit the size cap before the baseline was due has nothing to compare, and a
+	// baseline of zero would turn the result the cap exists to produce into a failure.
+	if warmup == 0 {
+		t.Logf("heap in use: %d bytes at the end, with no settled reading to compare it to", final)
+
+		return
+	}
 
 	t.Logf("heap in use: %d bytes once settled, %d bytes at the end", warmup, final)
 

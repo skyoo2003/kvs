@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"errors"
 	"flag"
 	"io/fs"
 	"path/filepath"
@@ -9,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/skyoo2003/kvs"
 	"github.com/skyoo2003/kvs/internal/datadir"
 )
 
@@ -63,6 +65,13 @@ type soakRun struct {
 	shorthanded int
 	refused     int
 	failovers   int
+	// window counts the writes acknowledged since the last check, and unverified the ones a check
+	// could not vouch for on its own. The load walks the keys in order, so a window longer than
+	// the keyspace overwrites values it already acknowledged and only the newer one is left to
+	// compare. Zero unverified means every acknowledged write was held against a returning node
+	// as itself, rather than as whatever replaced it.
+	window     int
+	unverified int
 	// warmup and final are the heap once the run has settled and at the end of it.
 	warmup heapSample
 	final  heapSample
@@ -126,15 +135,26 @@ func (r *soakRun) put(t *testing.T, key, value string) {
 				continue
 			}
 
-			if err := node.store.Put(key, value); err != nil {
+			err := node.store.Put(key, value)
+
+			// A refusal names the leader and is the ordinary answer from a follower, so the next
+			// node gets asked. Anything else - an apply that timed out, a store that failed, an
+			// FSM that would not take the frame - is not a redirect, and retrying until some node
+			// says yes would let a run that is quietly broken finish looking clean.
+			if errors.Is(err, kvs.ErrNotLeader) {
 				r.refused++
 
 				continue
 			}
 
+			if err != nil {
+				t.Fatalf("%s Put(%q) = %v, want nil or %v", node.id, key, err, kvs.ErrNotLeader)
+			}
+
 			r.acked[key] = value
 			r.last = key
 			r.writes++
+			r.window++
 
 			if r.down != nil {
 				r.shorthanded++
@@ -158,9 +178,10 @@ func (r *soakRun) takeDown(t *testing.T, i int) {
 }
 
 // bringBack restarts the stopped node and checks it against every acknowledged value before the
-// run is allowed to write again. Checking here rather than only at the end is what makes the
-// check mean something: a value lost while the node was away would otherwise be overwritten by
-// a later round, and the missing write would be gone from the evidence as well as from disk.
+// run is allowed to write again. Checking here rather than only at the end is what keeps the
+// evidence: a value lost while the node was away would otherwise be overwritten by a later
+// round, and the missing write would be gone from the record as well as from disk. It narrows
+// that window to one interval rather than closing it, which is what unverified counts.
 func (r *soakRun) bringBack(t *testing.T) {
 	t.Helper()
 
@@ -174,6 +195,7 @@ func (r *soakRun) bringBack(t *testing.T) {
 	// rest, and the comparison that follows is a comparison rather than a race.
 	node.mustEventuallyHold(t, r.last, r.acked[r.last])
 	r.mustHoldEverything(t, node)
+	r.closeWindow()
 
 	// Sampled every restart rather than only at the ends, because two readings cannot tell a
 	// leak from a step change. No forced collection here: this is a trend, and stopping the
@@ -194,6 +216,19 @@ func (r *soakRun) verify(t *testing.T) {
 		node.mustEventuallyHold(t, r.last, r.acked[r.last])
 		r.mustHoldEverything(t, node)
 	}
+
+	r.closeWindow()
+}
+
+// closeWindow settles what the check just made could account for. The load writes the keys in
+// order, so a window that ran past the keyspace acknowledged some keys twice, and the earlier
+// value of each is no longer anywhere to compare - not a loss, but not evidence either.
+func (r *soakRun) closeWindow() {
+	if r.window > soakKeys {
+		r.unverified += r.window - soakKeys
+	}
+
+	r.window = 0
 }
 
 func (r *soakRun) mustHoldEverything(t *testing.T, node *testNode) {
@@ -214,6 +249,7 @@ func (r *soakRun) report(t *testing.T) {
 		*soakFor, r.writes, len(r.acked), r.refused, r.failovers)
 	t.Logf("%d of those writes were taken while a node was stopped, each stopped for %s",
 		r.shorthanded, downFor)
+	t.Logf("%d acknowledged writes were superseded before a check could compare them", r.unverified)
 	t.Logf("heap alloc: %d bytes once settled, %d bytes at the end", r.warmup.alloc, r.final.alloc)
 	t.Logf("heap in use: %d bytes once settled, %d bytes at the end, %d goroutines left",
 		r.warmup.inUse, r.final.inUse, runtime.NumGoroutine())
