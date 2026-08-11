@@ -13,6 +13,12 @@ import (
 // soakFor turns the long run on and says how long it lasts. Zero, the default, skips it.
 var soakFor = flag.Duration("soak", 0, "run the soak test for this long")
 
+// A single node has nothing to restart, so -soak-down means nothing here. It is declared anyway
+// because `go test` hands every flag to every test binary it runs and `make soak` names this
+// package alongside the one the flag belongs to; a flag a binary has not declared fails it before
+// it starts.
+var _ = flag.Duration("soak-down", 0, "unused here; the cluster soak owns this")
+
 // soakKeys is a fixed set that gets overwritten, so the keyspace stays the same size while the
 // log does not. That difference is the measurement.
 const soakKeys = 1000

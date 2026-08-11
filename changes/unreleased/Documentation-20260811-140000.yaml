@@ -1,0 +1,5 @@
+kind: Documentation
+body: The clustering page no longer claims that a node restarting without pause grows the heap. Reproducing the original condition for four hours - the same 479 restarts, each node back the instant it stopped - moved the heap from 6.7MB to 7.0MB where the earlier figure implies about 130MB; that figure came from the harness before its load and its fault injection were separated. The Raft log still grows, and instant restarts reached 202MB a node against 126MB, because it grows with writes. `SOAK_DOWN=0` reproduces the condition and the cluster soak now fails if the heap more than doubles
+time: 2026-08-11T14:00:00.000000+09:00
+custom:
+    Issue: "248"

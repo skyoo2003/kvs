@@ -29,7 +29,12 @@ const killEvery = 30 * time.Second
 // downFor is how long it stays away, and writes carry on the whole time. Restarting it straight
 // away would leave it nothing to catch up on, and catching up is the part a restart has to
 // survive; a run that never writes into the gap proves only that a process can be started twice.
-const downFor = 10 * time.Second
+//
+// It is a flag rather than a constant because zero is its own experiment: a node coming back the
+// instant it dies is what a crash loop looks like, and that is the condition the heap grows under.
+// Reproducing it should not mean editing this file.
+var downFor = flag.Duration("soak-down", 10*time.Second,
+	"keep a stopped node down this long before restarting it; 0 is the crash-loop condition")
 
 // Hours of writes with a node taken away every half minute and kept away while the writes keep
 // coming, held after every restart and again at the end to every value kvs acknowledged. What
@@ -47,6 +52,7 @@ func TestSoakSurvivesLoadAndFailover(t *testing.T) {
 	run.load(t, *soakFor)
 	run.verify(t)
 	run.report(t)
+	run.assertHeapBounded(t)
 }
 
 type soakRun struct {
@@ -174,7 +180,7 @@ func (r *soakRun) takeDown(t *testing.T, i int) {
 
 	r.down = r.nodes[i]
 	r.down.stop(t)
-	r.backAt = time.Now().Add(downFor)
+	r.backAt = time.Now().Add(*downFor)
 }
 
 // bringBack restarts the stopped node and checks it against every acknowledged value before the
@@ -242,13 +248,31 @@ func (r *soakRun) mustHoldEverything(t *testing.T, node *testNode) {
 	}
 }
 
+// assertHeapBounded makes the heap something that fails rather than something that is read. Two
+// four hour runs — one keeping the stopped node down, one restarting it the instant it stopped —
+// both moved between 5.0MB and 8.6MB against a settled 6.7MB and finished inside that band. The
+// band itself spans 1.7x, which is why the limit is not tighter than doubling: under it is where
+// the sample happened to land, over it is a change in behavior.
+func (r *soakRun) assertHeapBounded(t *testing.T) {
+	t.Helper()
+
+	if r.warmup.inUse == 0 {
+		t.Fatal("the heap was never sampled after warmup, so this run says nothing about it")
+	}
+
+	if limit := r.warmup.inUse * 2; r.final.inUse > limit {
+		t.Errorf("heap in use went from %d to %d bytes, want at most %d",
+			r.warmup.inUse, r.final.inUse, limit)
+	}
+}
+
 func (r *soakRun) report(t *testing.T) {
 	t.Helper()
 
 	t.Logf("ran %s: %d writes acknowledged over %d keys, %d refused, %d node restarts",
 		*soakFor, r.writes, len(r.acked), r.refused, r.failovers)
 	t.Logf("%d of those writes were taken while a node was stopped, each stopped for %s",
-		r.shorthanded, downFor)
+		r.shorthanded, *downFor)
 	t.Logf("%d acknowledged writes were superseded before a check could compare them", r.unverified)
 	t.Logf("heap alloc: %d bytes once settled, %d bytes at the end", r.warmup.alloc, r.final.alloc)
 	t.Logf("heap in use: %d bytes once settled, %d bytes at the end, %d goroutines left",

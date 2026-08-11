@@ -3,6 +3,10 @@
 # How long `make soak` runs for. The full run behind the numbers in the docs is SOAK=4h.
 SOAK ?= 5m
 
+# How long a stopped node stays down before the cluster soak restarts it. SOAK_DOWN=0 brings it
+# back instantly, which is the crash-loop condition the heap numbers in the docs were taken under.
+SOAK_DOWN ?= 10s
+
 all: vet lint test build
 
 setup:
@@ -40,4 +44,4 @@ race:
 # test binary and falls back to the current directory. -timeout 0 leaves the deadline to the
 # test, so raising SOAK never means recalculating a second number.
 soak:
-	@go test . ./internal/cluster -run TestSoak -soak $(SOAK) -timeout 0 -v
+	@go test . ./internal/cluster -run TestSoak -soak $(SOAK) -soak-down $(SOAK_DOWN) -timeout 0 -v

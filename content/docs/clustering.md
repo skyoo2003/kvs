@@ -143,18 +143,26 @@ takes it only if 8,192 entries have arrived since the last — at the write rate
 another five or six minutes — then keeps the most recent 10,240 entries anyway. In the run above
 each node was going down every ninety seconds and so never lived long enough to take one:
 after four hours every node held **126MB of Raft log for a thousand keys**, none of it
-discardable. A node in a crash loop fills its disk while looking like it is merely restarting.
-A node that stays up snapshots normally and none of this arises.
+discardable. The same four hours with each node restarted instantly instead of kept down took
+558,813 writes rather than 329,631 and reached **202MB a node**: it grows with writes, not with
+time. A node in a crash loop fills its disk while looking like it is merely restarting. A node that
+stays up snapshots normally and none of this arises.
 
-**Memory holds under that churn, unless the node comes back instantly.** Across those four
-hours the heap of the one process holding all three nodes ended where it began, 4.3MB once
-settled and 4.0MB after 479 restarts. An earlier version of the same run restarted each node
-the moment it stopped rather than leaving it down, and that one climbed from 10MB to 139MB over
-four hours; a heap profile put more than half of what was still reachable in Raft's own network
-transport, which holds a 256KB read buffer and a 256KB write buffer per connection, while the
-only frame belonging to kvs held 544KB — the thousand keys themselves. Ten seconds down was
-enough for none of that to accumulate. It is the process that crash-loops without pause that
-grows, and it wants a memory limit as much as it wants the disk headroom above.
+**Memory holds under that churn, including when the node comes back instantly.** Across those
+four hours the heap of the one process holding all three nodes ended where it began, 4.3MB once
+settled and 4.0MB after 479 restarts. A second four hours, same three nodes and the same 479
+restarts but each one brought back the instant it stopped rather than kept down for ten seconds,
+ended at 7.0MB against 6.7MB once settled, moving between 5.0MB and 8.6MB along the way and
+finishing inside that band. Goroutines went from 26 to 27.
+
+An earlier run of this test reported that condition climbing from 10MB to 139MB, and a heap profile
+then put more than half of what was reachable in Raft's own network transport, which holds a 256KB
+read buffer and a 256KB write buffer per connection. That measurement predates separating the
+harness's load from its fault injection, and it does not survive the fix: at the same restart rate
+under the same instant restarts, what it implies across 479 restarts is around 130MB, and what
+happens is 0.3MB. The buffers are still there. They do not accumulate.
+
+`make soak SOAK=4h SOAK_DOWN=0` measures the crash-loop condition rather than the paced one.
 
 ## Configuration notes
 
