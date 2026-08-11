@@ -1,4 +1,4 @@
-## [v1.0.0](https://github.com/skyoo2003/kvs/releases/tag/v1.0.0) - 2026-08-11
+## [v1.0.0](https://github.com/skyoo2003/kvs/releases/tag/v1.0.0) - 2026-08-12
 ### Added
 * Redis/Valkey compatible RESP2 server on 127.0.0.1:6379, sharing one keyspace with the HTTP and gRPC APIs; it steps aside if the port is taken, holds at most 10000 connections, and bounds one transaction's queue at 64MiB so a single client cannot exhaust memory ([#232](https://github.com/skyoo2003/kvs/issues/232))
 * Lua scripting with EVAL, EVALSHA, and SCRIPT LOAD/EXISTS/FLUSH; a script runs sandboxed under one write lock, so its redis.call sequence is atomic, and gives up after 5 seconds rather than hold the store ([#232](https://github.com/skyoo2003/kvs/issues/232))
@@ -20,6 +20,7 @@
 ### Documentation
 * The durability and clustering page now carries measured numbers from a four hour run under load with a node stopped every thirty seconds and kept down for ten - 329,631 acknowledged writes, 111,516 of them taken while a node was gone, and none of them lost across 479 restarts - along with 51 bytes of append log per write, the Raft log a node too busy restarting never truncates, and a make soak target that reproduces all of it ([#246](https://github.com/skyoo2003/kvs/issues/246))
 * The release page now covers what one tag actually produces, the checks worth running before pushing it, and an upgrade section measured by running v0.1.1 and v1 side by side - the library, the CLI, and gRPC unchanged, an HTTP 405 now carrying a JSON body, a RESP listener appearing on loopback, and no data directory to migrate because v0.1.1 never wrote one ([#248](https://github.com/skyoo2003/kvs/issues/248))
+* The clustering page no longer claims that a node restarting without pause grows the heap. Reproducing the original condition for four hours - the same 479 restarts, each node back the instant it stopped - moved the heap from 6.7MB to 7.0MB where the earlier figure implies about 130MB; that figure came from the harness before its load and its fault injection were separated. The Raft log still grows, and instant restarts reached 202MB a node against 126MB, because it grows with writes. `SOAK_DOWN=0` reproduces the condition and the cluster soak now fails if the heap more than doubles ([#248](https://github.com/skyoo2003/kvs/issues/248))
 ### Misc
 * Migrate golangci-lint config to v2 and pin the linter to v2.12.2 in CI ([#229](https://github.com/skyoo2003/kvs/issues/229))
 ## [v0.1.1](https://github.com/skyoo2003/kvs/releases/tag/v0.1.1) - 2026-04-20
