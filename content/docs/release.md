@@ -21,6 +21,12 @@ changie batch v1.2.3        # fold every fragment into changes/v1.2.3.md
 changie merge               # prepend that file to CHANGELOG.md
 ```
 
+**A fragment is one sentence.** Two if the second earns it — a consequence, a caveat, or a number
+someone would otherwise have to ask for. Write what a reader upgrading can observe, not how it was
+built. `.changie.yaml` caps a body at 280 characters, which is about where a second sentence ends;
+hitting the cap means the fragment is carrying documentation, and documentation belongs on a page
+the notes can link to.
+
 `changie batch` empties `changes/unreleased/`, so **read what it produced before merging.** Two
 things are worth looking for, both of which have happened here:
 

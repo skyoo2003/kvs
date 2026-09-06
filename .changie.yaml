@@ -6,6 +6,12 @@ versionExt: md
 versionFormat: '## [{{ .Version }}](https://github.com/skyoo2003/kvs/releases/tag/{{ .Version }}) - {{ .Time.Format "2006-01-02" }}'
 kindFormat: "### {{ .Kind }}"
 changeFormat: "* {{ .Body }} ([#{{ .Custom.Issue }}](https://github.com/skyoo2003/kvs/issues/{{ .Custom.Issue }}))"
+body:
+  # One sentence, two at most. 280 characters is about where the second one
+  # ends; a fragment that needs more is carrying documentation, which belongs
+  # on a page the notes can link to.
+  minLength: 10
+  maxLength: 280
 kinds:
   - label: Added
   - label: Changed
