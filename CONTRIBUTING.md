@@ -67,8 +67,10 @@ make setup     # installs pre-commit hooks
 
 - Keep PRs small and focused on a single concern
 - Include tests for new functionality
-- Add a changelog fragment for user-visible changes: `changie new`, one sentence, two at most (see
-  [Release Process](https://skyoo2003.github.io/kvs/docs/release/))
+- Add a changelog fragment for user-visible changes: `changie new`, one sentence, two at most.
+  `.changie.yaml` caps a body at 280 characters, which is about where a second sentence ends; a
+  fragment that needs more is carrying documentation, which belongs on a page the notes can link to
+  (see [Release Process](https://skyoo2003.github.io/kvs/docs/release/))
 - Ensure `make all` passes (lint + test + build)
 - Update documentation if behavior changes
 

@@ -15,6 +15,11 @@ Brief description of the changes.
 
 - ...
 
+## Changelog
+
+- [ ] `changie new` fragment added — one sentence, two at most, 280 characters max
+- [ ] Not user-visible, no fragment needed
+
 ## Testing
 
 - [ ] `make all` passes
