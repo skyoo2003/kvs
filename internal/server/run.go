@@ -9,8 +9,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/skyoo2003/kvs"
 	"github.com/skyoo2003/kvs/internal/cluster"
+	"github.com/skyoo2003/kvs/pkg/kvs"
 )
 
 // Listeners carries the bound listeners RunListeners serves. A nil field disables that

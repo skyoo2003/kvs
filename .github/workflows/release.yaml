@@ -53,7 +53,7 @@ jobs:
       uses: goreleaser/goreleaser-action@v7.2.3
       with:
         version: "~> v2"
-        args: release --clean --release-notes changes/${{ github.ref_name }}.md
+        args: release --clean --config build/package/goreleaser.yaml --release-notes changes/${{ github.ref_name }}.md
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         HOMEBREW_TAP_TOKEN: ${{ steps.tap_token.outputs.token }}

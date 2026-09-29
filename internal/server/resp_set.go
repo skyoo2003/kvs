@@ -6,7 +6,7 @@ import (
 	"slices"
 	"strconv"
 
-	"github.com/skyoo2003/kvs"
+	"github.com/skyoo2003/kvs/pkg/kvs"
 )
 
 func (c *respConn) cmdSAdd(args [][]byte) error {

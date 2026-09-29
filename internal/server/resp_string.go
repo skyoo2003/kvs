@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/skyoo2003/kvs"
-	"github.com/skyoo2003/kvs/pkg/resp"
+	"github.com/skyoo2003/kvs/internal/resp"
+	"github.com/skyoo2003/kvs/pkg/kvs"
 )
 
 const (

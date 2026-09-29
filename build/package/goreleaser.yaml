@@ -86,7 +86,7 @@ homebrew_casks:
 dockers_v2:
 - images:
   - ghcr.io/skyoo2003/kvs
-  dockerfile: Dockerfile.goreleaser
+  dockerfile: build/package/Dockerfile.goreleaser
   ids:
   - kvs
   platforms:

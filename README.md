@@ -2,7 +2,7 @@
 
 A key-value store you can run as a server or import as a Go module.
 
-[![CI](https://github.com/skyoo2003/kvs/actions/workflows/ci.yaml/badge.svg)](https://github.com/skyoo2003/kvs/actions/workflows/ci.yaml) [![Go Reference](https://pkg.go.dev/badge/github.com/skyoo2003/kvs.svg)](https://pkg.go.dev/github.com/skyoo2003/kvs) [![Go Report Card](https://goreportcard.com/badge/github.com/skyoo2003/kvs)](https://goreportcard.com/report/github.com/skyoo2003/kvs)
+[![CI](https://github.com/skyoo2003/kvs/actions/workflows/ci.yaml/badge.svg)](https://github.com/skyoo2003/kvs/actions/workflows/ci.yaml) [![Go Reference](https://pkg.go.dev/badge/github.com/skyoo2003/kvs/pkg/kvs.svg)](https://pkg.go.dev/github.com/skyoo2003/kvs/pkg/kvs) [![Go Report Card](https://goreportcard.com/badge/github.com/skyoo2003/kvs)](https://goreportcard.com/report/github.com/skyoo2003/kvs)
 
 ## Features
 
@@ -13,7 +13,7 @@ A key-value store you can run as a server or import as a Go module.
 - **Durability** — `--data-dir` appends every change to a log and replays it at startup, so the keyspace survives a restart
 - **Clustering** — `--raft-addr` joins a Raft cluster, so losing the leader costs an election rather than a person
 - **Cobra/Viper CLI** — `serve` command with configurable listen addresses
-- **Library** — import `github.com/skyoo2003/kvs` directly in Go programs
+- **Library** — import `github.com/skyoo2003/kvs/pkg/kvs` in Go programs
 - **Docker** — container images published to `ghcr.io/skyoo2003/kvs`
 
 ## Installation
@@ -55,7 +55,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/skyoo2003/kvs"
+	"github.com/skyoo2003/kvs/pkg/kvs"
 )
 
 func main() {

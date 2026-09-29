@@ -21,8 +21,8 @@ import (
 	"github.com/hashicorp/raft"
 	raftboltdb "github.com/hashicorp/raft-boltdb/v2"
 
-	"github.com/skyoo2003/kvs"
 	"github.com/skyoo2003/kvs/internal/datadir"
+	"github.com/skyoo2003/kvs/pkg/kvs"
 )
 
 const (

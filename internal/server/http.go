@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/skyoo2003/kvs"
+	"github.com/skyoo2003/kvs/pkg/kvs"
 )
 
 type httpHandler struct {

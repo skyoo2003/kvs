@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/skyoo2003/kvs"
+	"github.com/skyoo2003/kvs/pkg/kvs"
 )
 
 // fakeCluster stands in for a real membership so that what a node reports about itself can be

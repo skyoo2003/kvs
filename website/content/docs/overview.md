@@ -14,7 +14,7 @@ KVS is a key-value store written in Go. It can be used as a library, via its CLI
 - **Durability** — `--data-dir` appends every change to a log and replays it at startup, so the keyspace survives a restart
 - **Clustering** — `--raft-addr` joins a Raft cluster, so losing the leader costs an election rather than a person
 - **Cobra/Viper CLI** — `serve` command with configurable listen addresses
-- **Library** — import `github.com/skyoo2003/kvs` directly in Go programs
+- **Library** — import `github.com/skyoo2003/kvs/pkg/kvs` in Go programs
 - **Docker** — container images published to `ghcr.io/skyoo2003/kvs`
 
 ## Installation
@@ -50,14 +50,14 @@ Every flag, and how to set it from a config file or the environment, is on the
 
 ### Library
 
-Import `github.com/skyoo2003/kvs` to use KVS as a library:
+Import `github.com/skyoo2003/kvs/pkg/kvs` to use KVS as a library:
 
 ```go
 package main
 
 import (
 	"fmt"
-	"github.com/skyoo2003/kvs"
+	"github.com/skyoo2003/kvs/pkg/kvs"
 )
 
 func main() {

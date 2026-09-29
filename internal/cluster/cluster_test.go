@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/skyoo2003/kvs"
+	"github.com/skyoo2003/kvs/pkg/kvs"
 )
 
 // The milestone in one test: the leader goes away, nobody does anything, and writes come back.

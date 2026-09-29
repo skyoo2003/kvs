@@ -7,6 +7,7 @@ Thumbs.db
 *.swp
 .vscode/
 .idea/
+.serena/
 
 # Go
 vendor/
@@ -25,6 +26,6 @@ coverage.html
 dist/
 
 # Hugo
-/public/
-/resources/
-/.hugo_build.lock
+/website/public/
+/website/resources/
+/website/.hugo_build.lock

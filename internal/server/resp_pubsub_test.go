@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/skyoo2003/kvs"
+	"github.com/skyoo2003/kvs/pkg/kvs"
 )
 
 // newRESPClients opens count clients against one server, which is what pub/sub needs.

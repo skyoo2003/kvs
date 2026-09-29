@@ -5,7 +5,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/skyoo2003/kvs"
+	"github.com/skyoo2003/kvs/pkg/kvs"
 )
 
 func TestRESPHashCommands(t *testing.T) {

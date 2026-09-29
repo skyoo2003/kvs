@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"bytes"
@@ -11,6 +11,8 @@ import (
 )
 
 const testVersionOutput = "1.2.3\n"
+
+var version = "dev"
 
 func TestExecuteShowsHelpByDefault(t *testing.T) {
 	out, errOut, err := runCLI(t)
@@ -96,7 +98,7 @@ func runCLI(t *testing.T, args ...string) (stdout, stderr string, err error) {
 
 	var stdoutBuf bytes.Buffer
 	var stderrBuf bytes.Buffer
-	err = execute(args, &stdoutBuf, &stderrBuf)
+	err = Execute(args, &stdoutBuf, &stderrBuf, version)
 
 	return stdoutBuf.String(), stderrBuf.String(), err
 }

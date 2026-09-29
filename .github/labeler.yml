@@ -5,8 +5,7 @@ documentation:
   - changed-files:
       - any-glob-to-any-file:
           - "*.md"
-          - "docs/**"
-          - "content/**"
+          - "website/**"
 
 dependencies:
   - changed-files:
@@ -28,4 +27,4 @@ github_actions:
 docker:
   - changed-files:
       - any-glob-to-any-file:
-          - "Dockerfile*"
+          - "build/package/Dockerfile*"

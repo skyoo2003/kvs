@@ -3,8 +3,8 @@ package server
 import (
 	"bytes"
 
-	"github.com/skyoo2003/kvs"
-	"github.com/skyoo2003/kvs/pkg/resp"
+	"github.com/skyoo2003/kvs/internal/resp"
+	"github.com/skyoo2003/kvs/pkg/kvs"
 )
 
 // respPreAuthCommands may run before AUTH succeeds, so that a client can authenticate and

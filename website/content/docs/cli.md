@@ -84,4 +84,4 @@ $ kvs -v
 - [HTTP API](../http-api/) — REST endpoint details
 - [Redis API](../redis-api/) — supported RESP commands and behaviour notes
 - [Durability and Clustering](../clustering/) — what `--data-dir` and `--raft-addr` promise
-- [Go package reference](https://pkg.go.dev/github.com/skyoo2003/kvs)
+- [Go package reference](https://pkg.go.dev/github.com/skyoo2003/kvs/pkg/kvs)

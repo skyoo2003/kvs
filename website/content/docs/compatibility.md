@@ -46,7 +46,9 @@ New flags may be added. Existing ones will not change under you.
 
 ### The Go library
 
-Importing `github.com/skyoo2003/kvs` gets you:
+Importing `github.com/skyoo2003/kvs/pkg/kvs` gets you:
+
+The former module-root library path is no longer provided; update imports to this package path.
 
 - `Store` and its constructors `NewStore` and `Open`, with `Get`, `Put`, `Delete`, `Read`,
   `Write`, `Snapshot`, `Speculate`, `Watch`, `SetCodec`, and `Close`
@@ -55,11 +57,11 @@ Importing `github.com/skyoo2003/kvs` gets you:
 - The sentinel errors `ErrKeyNotFound`, `ErrNoCodec`, `ErrUnsupportedValue`, and `ErrNotLeader`
   with `NotLeaderError`
 
-The exact signatures live in [`testdata/api-surface.txt`][surface], which is generated from
+The exact signatures live in [`pkg/kvs/testdata/api-surface.txt`][surface], which is generated from
 the source and compared against it by a test on every run. Nothing can join or leave that file
 without the change showing up in review.
 
-[surface]: https://github.com/skyoo2003/kvs/blob/main/testdata/api-surface.txt
+[surface]: https://github.com/skyoo2003/kvs/blob/main/pkg/kvs/testdata/api-surface.txt
 
 ## What v1 does not cover
 
@@ -67,9 +69,9 @@ without the change showing up in review.
 exported so `internal/cluster` can reach them across the package boundary, not for callers
 importing this package. They may change or disappear in a minor release.
 
-**`github.com/skyoo2003/kvs/pkg/resp`.** It exists so the server can speak RESP2, not as a
-RESP library for other programs. The protocol kvs answers on the wire is promised; this Go
-package is not.
+**The RESP codec.** It is private under `internal/resp` because it exists so the server can
+speak RESP2, not as a RESP library for other programs. The protocol kvs answers on the wire is
+promised; its codec implementation is not.
 
 **Anything under `internal/`.** The Go toolchain already stops you importing it; this is the
 same statement in words.

@@ -7,10 +7,10 @@ on:
       - "**/*.go"
       - "go.mod"
       - "go.sum"
-      - "Dockerfile"
-      - "Dockerfile.goreleaser"
+      - "build/package/Dockerfile"
+      - "build/package/Dockerfile.goreleaser"
       - ".dockerignore"
-      - ".goreleaser.yml"
+      - "build/package/goreleaser.yaml"
       - ".github/workflows/cd.yml"
   pull_request:
     branches: [main]
@@ -18,10 +18,10 @@ on:
       - "**/*.go"
       - "go.mod"
       - "go.sum"
-      - "Dockerfile"
-      - "Dockerfile.goreleaser"
+      - "build/package/Dockerfile"
+      - "build/package/Dockerfile.goreleaser"
       - ".dockerignore"
-      - ".goreleaser.yml"
+      - "build/package/goreleaser.yaml"
       - ".github/workflows/cd.yml"
 
 concurrency:
@@ -52,7 +52,7 @@ jobs:
       - uses: docker/build-push-action@v6
         with:
           context: .
-          file: Dockerfile
+          file: build/package/Dockerfile
           push: ${{ github.event_name == 'push' }}
           load: ${{ github.event_name == 'pull_request' }}
           tags: |
@@ -90,4 +90,4 @@ jobs:
         uses: goreleaser/goreleaser-action@v7.2.3
         with:
           version: "~> v2"
-          args: release --snapshot --clean
+          args: release --snapshot --clean --config build/package/goreleaser.yaml

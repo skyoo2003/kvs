@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/skyoo2003/kvs"
+	"github.com/skyoo2003/kvs/pkg/kvs"
 )
 
 // respClient is a raw protocol client, so that the tests assert the bytes on the wire
