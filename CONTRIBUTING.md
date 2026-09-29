@@ -89,6 +89,11 @@ make setup     # installs pre-commit hooks
 
 ## PR Guidelines
 
+By submitting a contribution, you confirm that you have the right to submit it
+and license it under the [Apache License 2.0](LICENSE). Do not include copied
+or generated third-party material unless its license and required notices are
+identified for inclusion in the release notice bundle.
+
 - Keep PRs small and focused on a single concern
 - Include tests for new functionality
 - Add a changelog fragment for user-visible changes: `changie new`, one sentence, two at most.

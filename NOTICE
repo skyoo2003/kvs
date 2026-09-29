@@ -4,6 +4,11 @@ Copyright 2020-2026 Sung-Kyu Yoo
 This product includes third-party software. The inventory below describes the
 modules linked into the kvs binary. Their respective license terms apply.
 
+Binary archives and container images also include a THIRD_PARTY_LICENSES
+directory containing the exact license and upstream NOTICE files for these
+module versions. The inventory is verified in CI against the modules linked
+into ./cmd/kvs.
+
 Third-party components
 ----------------------
 - github.com/boltdb/bolt@v1.3.1 — MIT
