@@ -8,6 +8,10 @@ on:
     - "**/*.go"
     - "go.mod"
     - "go.sum"
+    - "LICENSE"
+    - "NOTICE"
+    - "scripts/verify-notice.sh"
+    - "build/package/goreleaser.yaml"
     - "README.md"
     - ".goreleaser.yml"
     - ".golangci.yaml"
@@ -21,6 +25,10 @@ on:
     - "**/*.go"
     - "go.mod"
     - "go.sum"
+    - "LICENSE"
+    - "NOTICE"
+    - "scripts/verify-notice.sh"
+    - "build/package/goreleaser.yaml"
     - "README.md"
     - ".goreleaser.yml"
     - ".golangci.yaml"
@@ -55,6 +63,8 @@ jobs:
         version: v2.12.2
     - name: Go test
       run: make test
+    - name: Verify third-party notices
+      run: make notice
     - name: Go build
       run: make build
     # Validates .goreleaser.yml schema changes (formats:, dockers_v2.platforms, ...)

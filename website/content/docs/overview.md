@@ -76,4 +76,5 @@ assumes are on the [Compatibility](../compatibility/) page.
 
 ## License
 
-MIT License. See [LICENSE](https://github.com/skyoo2003/kvs/blob/main/LICENSE) for details.
+Apache License 2.0. See [LICENSE](https://github.com/skyoo2003/kvs/blob/main/LICENSE) and
+[NOTICE](https://github.com/skyoo2003/kvs/blob/main/NOTICE) for details.

@@ -96,7 +96,7 @@ go in the same change — while it is there, it wins and the migration never fir
 | Homebrew cask | `skyoo2003/homebrew-tap`, installed with `brew install skyoo2003/tap/kvs` |
 | Release notes | The GitHub release body, taken from `changes/v1.2.3.md` |
 
-Each archive carries the binary plus `LICENSE`, `README.md`, `CHANGELOG.md`, and
+Each archive carries the binary plus `LICENSE`, `NOTICE`, `README.md`, `CHANGELOG.md`, and
 `CODE_OF_CONDUCT.md`. The binary reports the tag through `kvs version`.
 
 **Every container tag but the first moves.** `latest-alpine`, `v1-alpine`, and `v1.2-alpine` point
