@@ -280,8 +280,55 @@ func TestRESPClientAndInfo(t *testing.T) {
 			t.Fatalf("INFO = %q, want it to contain %q", info, want)
 		}
 	}
-	if !strings.Contains(info, "connected_clients:1") {
-		t.Fatalf("INFO = %q, want connected_clients:1", info)
+	// Five CLIENT calls and the INFO itself, which is counted before it reports.
+	for _, want := range []string{
+		"connected_clients:1\r\n", "total_connections_received:1\r\n",
+		"total_commands_processed:6\r\n", "used_memory:",
+	} {
+		if !strings.Contains(info, want) {
+			t.Fatalf("INFO = %q, want it to contain %q", info, want)
+		}
+	}
+}
+
+// A queued command is counted when EXEC runs it, not when it is queued, so a transaction is not
+// counted twice.
+func TestRESPInfoCountsQueuedCommandsOnExec(t *testing.T) {
+	client := newRESPClient(t, kvs.NewStore())
+
+	client.do("+OK"+respCRLF, "MULTI")
+	client.do("+QUEUED"+respCRLF, "SET", "k", "v")
+	client.do("+QUEUED"+respCRLF, "GET", "k")
+	client.do("*2"+respCRLF+"+OK"+respCRLF+"$1"+respCRLF+"v"+respCRLF, "EXEC")
+
+	client.send("INFO")
+	if info := client.readBulk(); !strings.Contains(info, "total_commands_processed:5\r\n") {
+		t.Fatalf("INFO = %q, want total_commands_processed:5", info)
+	}
+}
+
+// A redis.call is a command of its own, so a script that makes one counts twice.
+func TestRESPInfoCountsScriptCalls(t *testing.T) {
+	client := newRESPClient(t, kvs.NewStore())
+
+	client.do("+OK"+respCRLF, respCmdEval, "return redis.call('SET','k','v')", "0")
+
+	client.send("INFO")
+	if info := client.readBulk(); !strings.Contains(info, "total_commands_processed:3\r\n") {
+		t.Fatalf("INFO = %q, want total_commands_processed:3", info)
+	}
+}
+
+// A command refused before its handler runs is not a processed command.
+func TestRESPInfoSkipsRejectedCommands(t *testing.T) {
+	client := newRESPClient(t, kvs.NewStore())
+
+	client.do("-ERR unknown command 'NOPE'"+respCRLF, "NOPE")
+	client.do("-ERR wrong number of arguments for 'echo' command"+respCRLF, "ECHO")
+
+	client.send("INFO")
+	if info := client.readBulk(); !strings.Contains(info, "total_commands_processed:1\r\n") {
+		t.Fatalf("INFO = %q, want total_commands_processed:1", info)
 	}
 }
 

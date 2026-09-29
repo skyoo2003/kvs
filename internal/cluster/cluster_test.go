@@ -144,7 +144,7 @@ func newStore() *kvs.Store {
 	return store
 }
 
-func startCluster(t *testing.T, size int) []*testNode {
+func startCluster(t testing.TB, size int) []*testNode {
 	t.Helper()
 
 	nodes := make([]*testNode, 0, size)
@@ -171,7 +171,7 @@ func startCluster(t *testing.T, size int) []*testNode {
 	return nodes
 }
 
-func (n *testNode) start(t *testing.T, bootstrap bool) {
+func (n *testNode) start(t testing.TB, bootstrap bool) {
 	t.Helper()
 
 	n.store = newStore()
@@ -195,7 +195,7 @@ func (n *testNode) start(t *testing.T, bootstrap bool) {
 	})
 }
 
-func (n *testNode) stop(t *testing.T) {
+func (n *testNode) stop(t testing.TB) {
 	t.Helper()
 
 	if err := n.node.Close(); err != nil {
@@ -206,13 +206,13 @@ func (n *testNode) stop(t *testing.T) {
 
 // restart brings the node back on the same address with the same log, which is what a process
 // that was killed and started again looks like to the rest of the cluster.
-func (n *testNode) restart(t *testing.T) {
+func (n *testNode) restart(t testing.TB) {
 	t.Helper()
 
 	n.start(t, false)
 }
 
-func (n *testNode) mustEventuallyHold(t *testing.T, key, want string) {
+func (n *testNode) mustEventuallyHold(t testing.TB, key, want string) {
 	t.Helper()
 
 	eventually(t, n.id+" to hold "+key, func() bool {
@@ -222,7 +222,7 @@ func (n *testNode) mustEventuallyHold(t *testing.T, key, want string) {
 	})
 }
 
-func waitForLeader(t *testing.T, nodes []*testNode) *testNode {
+func waitForLeader(t testing.TB, nodes []*testNode) *testNode {
 	t.Helper()
 
 	var leader *testNode
@@ -244,7 +244,7 @@ func waitForLeader(t *testing.T, nodes []*testNode) *testNode {
 // waitForWrite offers the write to every node until one takes it, and reports which did. It is
 // what a client retrying a rejected write does, so timing it measures the outage a client sees
 // rather than the moment the cluster privately agreed on a leader.
-func waitForWrite(t *testing.T, nodes []*testNode, key, value string) *testNode {
+func waitForWrite(t testing.TB, nodes []*testNode, key, value string) *testNode {
 	t.Helper()
 
 	var taken *testNode
@@ -276,7 +276,7 @@ func without(nodes []*testNode, excluded *testNode) []*testNode {
 
 // reserveAddr picks a free port and lets go of it, so Raft can bind it and a restarted node can
 // bind it again.
-func reserveAddr(t *testing.T) string {
+func reserveAddr(t testing.TB) string {
 	t.Helper()
 
 	var lc net.ListenConfig
@@ -295,7 +295,7 @@ func reserveAddr(t *testing.T) string {
 
 // eventually waits for consensus to settle. Elections take as long as they take, so polling is
 // the only honest way to wait for one.
-func eventually(t *testing.T, what string, check func() bool) {
+func eventually(t testing.TB, what string, check func() bool) {
 	t.Helper()
 
 	deadline := time.Now().Add(30 * time.Second)

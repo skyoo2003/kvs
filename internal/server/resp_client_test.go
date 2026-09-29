@@ -14,7 +14,7 @@ import (
 // newGoRedisClient starts a RESP server and connects a real client library to it. Hand
 // written bytes cover the wire format elsewhere; this exists to check the parts a client
 // drives on its own, such as protocol negotiation, pipelining, and subscribe bookkeeping.
-func newGoRedisClient(t *testing.T, opts *redis.Options) *redis.Client {
+func newGoRedisClient(t testing.TB, opts *redis.Options) *redis.Client {
 	t.Helper()
 
 	var lc net.ListenConfig

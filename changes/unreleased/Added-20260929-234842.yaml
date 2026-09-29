@@ -1,0 +1,5 @@
+kind: Added
+body: '`INFO` now reports `total_connections_received`, `total_commands_processed`, and `used_memory`, and `make bench` and `make memtier` measure the store, the RESP path, and a three-node cluster.'
+time: 2026-09-29T23:48:42.733703+09:00
+custom:
+    Issue: "270"

@@ -75,6 +75,14 @@ make soak            # 5 minutes of load with a node restarted every 30 seconds
 make soak SOAK=4h    # the full run the numbers in the docs come from
 ```
 
+Benchmarks are opt-in too. `make memtier` needs `memtier_benchmark` and `redis-cli` on `PATH`
+(`brew install memtier_benchmark redis`):
+
+```sh
+make bench                      # Go benchmarks for the store, RESP, and a three-node cluster
+make memtier BENCH_MODE=cluster # 60 seconds of memtier load; memory, durable, or cluster
+```
+
 ### Pre-commit Hooks (optional)
 
 ```sh
