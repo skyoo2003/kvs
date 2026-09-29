@@ -12,17 +12,40 @@ Thanks for your interest in contributing!
 
 ```
 .
-├── kvs.go              # Store (Get, Put, Delete), in memory unless Open gives it a log
-├── log.go              # Append log the keyspace survives a restart through
-├── replication.go      # The store methods a cluster drives the keyspace through
-├── cmd/kvs/            # CLI entrypoint (Cobra)
+├── cmd/kvs/            # Thin CLI entrypoint
+├── pkg/kvs/            # Public Store library and append log
+├── internal/app/kvs/   # Cobra/Viper CLI application
 ├── internal/server/    # HTTP, gRPC, and RESP server implementations
 ├── internal/cluster/   # Raft membership, kept out of the library API
 ├── api/kvsv1/          # Generated protobuf/gRPC code
-├── pkg/resp/           # RESP2 wire protocol codec
-├── content/            # Hugo documentation site
+├── internal/resp/      # Private RESP2 wire protocol codec
+├── website/            # Hugo documentation site
 └── changes/            # Changelog fragments (Changie)
 ```
+
+### Project Layout Guidelines
+
+Follow [golang-standards/project-layout](https://github.com/golang-standards/project-layout)
+where it fits this repository. Create directories only when they have a clear purpose; do not
+add empty placeholders or a top-level `src/` directory.
+
+- `cmd/<binary>/` contains a minimal `main` package that wires arguments, standard streams, and
+  build metadata into an internal application package.
+- `internal/app/<binary>/` owns CLI composition. `internal/` owns code that external Go modules
+  must not import, including server, cluster, persistence, and protocol implementation.
+- `pkg/<library>/` contains libraries intentionally supported for external import. Public KVS
+  code belongs in `pkg/kvs`; do not add non-public packages under `pkg/`.
+- `api/` contains source protocol contracts and generated API bindings.
+- `build/package/` contains Docker and release-packaging configuration. Keep tool-required
+  workflow files and repository-root configuration at their required locations.
+- `website/` contains the Hugo project; do not commit its generated `public/` and `resources/`
+  directories.
+- Keep unit tests next to their packages and package-specific Go test fixtures in that package's
+  `testdata/` directory.
+
+When relocating code, preserve public import paths and behavior unless a change explicitly
+authorizes a breaking API migration. Update imports, build/release automation, ownership rules,
+and documentation in the same change.
 
 ## Getting Started
 

@@ -6,10 +6,7 @@ on:
       - main
     paths:
       - ".github/workflows/docs.yaml"
-      - "hugo.toml"
-      - "content/**"
-      - "layouts/**"
-      - "static/**"
+      - "website/**"
       - "README.md"
       - "CONTRIBUTING.md"
   pull_request:
@@ -17,10 +14,7 @@ on:
       - main
     paths:
       - ".github/workflows/docs.yaml"
-      - "hugo.toml"
-      - "content/**"
-      - "layouts/**"
-      - "static/**"
+      - "website/**"
       - "README.md"
       - "CONTRIBUTING.md"
   workflow_dispatch:
@@ -52,12 +46,12 @@ jobs:
           hugo-version: '0.148.2'
 
       - name: Build documentation site
-        run: hugo build --gc --minify
+        run: hugo --source website build --gc --minify
 
       - name: Upload documentation artifact
         uses: actions/upload-pages-artifact@v5
         with:
-          path: public
+          path: website/public
 
   deploy:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'

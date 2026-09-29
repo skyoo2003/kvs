@@ -14,8 +14,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/skyoo2003/kvs"
 	"github.com/skyoo2003/kvs/api/kvsv1"
+	"github.com/skyoo2003/kvs/pkg/kvs"
 )
 
 func TestRunListenersSharesStoreAcrossHTTPAndGRPC(t *testing.T) {

@@ -4,6 +4,6 @@
 .vscode
 .vagrant
 dist
-docs
+website
 vendor
 helm

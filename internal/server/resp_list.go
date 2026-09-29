@@ -4,7 +4,7 @@ import (
 	"math"
 	"strconv"
 
-	"github.com/skyoo2003/kvs"
+	"github.com/skyoo2003/kvs/pkg/kvs"
 )
 
 // cmdPush handles LPUSH, RPUSH, LPUSHX, and RPUSHX.

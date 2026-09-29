@@ -3,7 +3,7 @@ package server
 import (
 	"maps"
 
-	"github.com/skyoo2003/kvs"
+	"github.com/skyoo2003/kvs/pkg/kvs"
 )
 
 // Redis type names as TYPE reports them. The dynamic type of a stored value is what gives a

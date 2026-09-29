@@ -14,14 +14,14 @@ import (
 )
 
 // goldenPath holds the exported surface of this package. It is the machine-readable half of
-// content/docs/compatibility.md: the page says what is promised, this file says what is there.
+// website/content/docs/compatibility.md: the page says what is promised, this file says what is there.
 const goldenPath = "testdata/api-surface.txt"
 
 // headerSep ends the human-facing preamble of the golden file. Everything after it is the
 // surface itself, so the warning can be reworded without touching the comparison.
 const headerSep = "# ---\n"
 
-const surfaceHeader = `# Exported API surface of this package - see content/docs/compatibility.md
+const surfaceHeader = `# Exported API surface of this package - see website/content/docs/compatibility.md
 # for how much of it v1 promises, and for the cluster plumbing it exempts by name.
 # A line changed or removed below is a breaking change and needs a major version, unless the
 # page exempts it. A line added is a new promise: it cannot be taken back within v1.
@@ -64,8 +64,8 @@ func TestPublicAPISurface(t *testing.T) {
 	if got != want {
 		t.Errorf("exported API surface changed.\n%s\n\n"+
 			"A changed or removed line is a breaking change unless compatibility.md exempts it;\n"+
-			"an added line is a new promise. See content/docs/compatibility.md. If deliberate:\n"+
-			"  go test -run TestPublicAPISurface . -update",
+			"an added line is a new promise. See website/content/docs/compatibility.md. If deliberate:\n"+
+			"  go test ./pkg/kvs -run TestPublicAPISurface -update",
 			firstDifference(want, got))
 	}
 }

@@ -6,7 +6,7 @@ import (
 	"maps"
 	"slices"
 
-	"github.com/skyoo2003/kvs"
+	"github.com/skyoo2003/kvs/pkg/kvs"
 )
 
 // respCodec persists the value types the RESP commands store. It lives here rather than beside

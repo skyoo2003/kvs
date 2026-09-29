@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/skyoo2003/kvs"
 	"github.com/skyoo2003/kvs/internal/datadir"
+	"github.com/skyoo2003/kvs/pkg/kvs"
 )
 
 // soakFor turns the long run on and says how long it lasts. Zero, the default, skips it, so

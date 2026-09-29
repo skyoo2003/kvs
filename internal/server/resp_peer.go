@@ -7,13 +7,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/skyoo2003/kvs/pkg/resp"
+	"github.com/skyoo2003/kvs/internal/resp"
 )
 
 // respPeerTimeout bounds a conversation with another node. Nothing here waits on a person.
 const respPeerTimeout = 10 * time.Second
 
-// peerConn talks to another kvs node over RESP. pkg/resp reads client commands, which is the
+// peerConn talks to another kvs node over RESP. internal/resp reads client commands, which is the
 // other half of the conversation, so a client reading replies needs this much of its own.
 type peerConn struct {
 	conn   net.Conn

@@ -15,8 +15,8 @@ import (
 
 	lua "github.com/yuin/gopher-lua"
 
-	"github.com/skyoo2003/kvs"
-	"github.com/skyoo2003/kvs/pkg/resp"
+	"github.com/skyoo2003/kvs/internal/resp"
+	"github.com/skyoo2003/kvs/pkg/kvs"
 )
 
 const (

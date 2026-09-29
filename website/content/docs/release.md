@@ -51,7 +51,7 @@ git tag v1.2.3 && git push origin v1.2.3
 |---|---|
 | `changes/v1.2.3.md` exists on `main` | The workflow fails in two seconds without it, after the tag is already pushed |
 | `make all` passes | Nothing downstream runs the tests |
-| `go test -run TestPublicAPISurface .` passes | An unintended change to the exported Go surface is a broken promise — see [Compatibility](../compatibility/) |
+| `go test ./pkg/kvs -run TestPublicAPISurface` passes | An unintended change to the exported Go surface is a broken promise — see [Compatibility](../compatibility/) |
 | `goreleaser check` passes | Catches deprecated configuration before a floating GoReleaser version turns it into a failed release |
 | `gh release list` has no stale draft | Release Drafter keeps a rolling draft; it does not collide with a real tag, but it lingers next to the release just cut |
 | The tap still holds its formula | Deleting it before the cask exists leaves `brew install skyoo2003/tap/kvs` with nothing to resolve. The swap belongs after the release job, not before the tag — see below |
@@ -154,8 +154,8 @@ above.
 ## Documentation site
 
 The Hugo site at [skyoo2003.github.io/kvs](https://skyoo2003.github.io/kvs/) is published by
-`.github/workflows/docs.yaml` on every push to `main` that touches `hugo.toml`, `content/`,
-`layouts/`, `static/`, `README.md`, or `CONTRIBUTING.md`. Hugo builds into `public/`, which
+`.github/workflows/docs.yaml` on every push to `main` that touches `website/`, `README.md`, or
+`CONTRIBUTING.md`. Hugo builds into `website/public/`, which
 `actions/upload-pages-artifact` and `actions/deploy-pages` publish. It needs the repository's Pages
 setting to deploy from GitHub Actions.
 

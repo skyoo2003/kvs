@@ -5,7 +5,7 @@ import (
 	"slices"
 	"strconv"
 
-	"github.com/skyoo2003/kvs"
+	"github.com/skyoo2003/kvs/pkg/kvs"
 )
 
 // respWriteHash loads the hash at key for a mutating command, returning an empty hash when

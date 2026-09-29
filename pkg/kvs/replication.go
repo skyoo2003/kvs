@@ -35,7 +35,7 @@ func (e *NotLeaderError) Is(target error) bool {
 // understanding that it is wired up once at startup.
 //
 // Exported for internal/cluster to reach across the package boundary, and outside the v1
-// compatibility promise: see content/docs/compatibility.md.
+// compatibility promise: see website/content/docs/compatibility.md.
 func (s *Store) SetReplicator(replicate func(fn func(tx *Tx) error) error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -65,7 +65,7 @@ func (s *Store) SetCodec(codec Codec) {
 // node held before is worth keeping only until it arrives.
 //
 // Exported for internal/cluster to reach across the package boundary, and outside the v1
-// compatibility promise: see content/docs/compatibility.md.
+// compatibility promise: see website/content/docs/compatibility.md.
 func (s *Store) ReplaceWith(snapshot [][]byte) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -82,7 +82,7 @@ func (s *Store) ReplaceWith(snapshot [][]byte) error {
 // atomic on every node.
 //
 // Exported for internal/cluster to reach across the package boundary, and outside the v1
-// compatibility promise: see content/docs/compatibility.md.
+// compatibility promise: see website/content/docs/compatibility.md.
 func (s *Store) ApplyReplicated(lines [][]byte) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

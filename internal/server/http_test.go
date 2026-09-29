@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/skyoo2003/kvs"
+	"github.com/skyoo2003/kvs/pkg/kvs"
 )
 
 func newTestRequest(t *testing.T, method, target string, body io.Reader) *http.Request {
