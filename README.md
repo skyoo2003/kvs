@@ -187,6 +187,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the project contribution process.
 
 ## [License](LICENSE)
 
-The MIT License
+Apache License 2.0
 
 Copyright (c) 2020-2026 Sung-Kyu Yoo

@@ -1,4 +1,4 @@
-.PHONY: all setup clean build test lint lint-fix vet coverage race soak
+.PHONY: all setup clean build test lint lint-fix vet coverage race soak notice
 
 # How long `make soak` runs for. The full run behind the numbers in the docs is SOAK=4h.
 SOAK ?= 5m
@@ -8,6 +8,9 @@ SOAK ?= 5m
 SOAK_DOWN ?= 10s
 
 all: vet lint test build
+
+notice:
+	@./scripts/verify-notice.sh
 
 setup:
 	@pre-commit install

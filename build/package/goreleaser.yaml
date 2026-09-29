@@ -44,6 +44,7 @@ archives:
     formats: [ zip ]
   files:
     - LICENSE
+    - NOTICE
     - README.md
     - CHANGELOG.md
     - CODE_OF_CONDUCT.md
@@ -72,7 +73,7 @@ homebrew_casks:
     token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
   homepage: "https://github.com/skyoo2003/kvs"
   description: "A key-value store you can run as a server or import as a Go module"
-  license: "MIT"
+  license: "Apache-2.0"
   # Nothing signs or notarizes these binaries, so Gatekeeper quarantines what the cask staged and
   # the first run dies on a dialog rather than an error. Stripping the attribute is what makes an
   # unsigned cask runnable; it is not an optional nicety.

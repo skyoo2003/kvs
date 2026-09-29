@@ -64,6 +64,7 @@ make all       # lint + test + build
 make lint      # run golangci-lint
 make test      # run tests
 make build     # build binary to dist/
+make notice    # verify third-party notice inventory
 make clean     # remove dist/
 ```
 
