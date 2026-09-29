@@ -1,4 +1,4 @@
-.PHONY: all setup clean build test lint lint-fix vet coverage race soak notice
+.PHONY: all setup clean build test lint lint-fix vet coverage race soak notice licenses verify-release-artifacts
 
 # How long `make soak` runs for. The full run behind the numbers in the docs is SOAK=4h.
 SOAK ?= 5m
@@ -11,6 +11,13 @@ all: vet lint test build
 
 notice:
 	@./scripts/verify-notice.sh
+
+licenses:
+	@rm -rf dist/THIRD_PARTY_LICENSES
+	@./scripts/collect-third-party-licenses.sh dist/THIRD_PARTY_LICENSES
+
+verify-release-artifacts:
+	@./scripts/verify-release-artifacts.sh dist
 
 setup:
 	@pre-commit install

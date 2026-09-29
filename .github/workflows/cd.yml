@@ -9,6 +9,8 @@ on:
       - "go.sum"
       - "LICENSE"
       - "NOTICE"
+      - "scripts/collect-third-party-licenses.sh"
+      - "scripts/verify-release-artifacts.sh"
       - "build/package/Dockerfile"
       - "build/package/Dockerfile.goreleaser"
       - ".dockerignore"
@@ -22,6 +24,8 @@ on:
       - "go.sum"
       - "LICENSE"
       - "NOTICE"
+      - "scripts/collect-third-party-licenses.sh"
+      - "scripts/verify-release-artifacts.sh"
       - "build/package/Dockerfile"
       - "build/package/Dockerfile.goreleaser"
       - ".dockerignore"
@@ -69,7 +73,13 @@ jobs:
       # changes, so actually run the binary as the unprivileged user.
       - name: Smoke test the image
         if: github.event_name == 'pull_request'
-        run: docker run --rm ghcr.io/skyoo2003/kvs:dev version
+        run: |
+          docker run --rm ghcr.io/skyoo2003/kvs:dev version
+          docker run --rm --entrypoint sh ghcr.io/skyoo2003/kvs:dev -c '
+            test -s /usr/share/licenses/kvs/LICENSE &&
+            test -s /usr/share/licenses/kvs/NOTICE &&
+            test -s /usr/share/licenses/kvs/THIRD_PARTY_LICENSES/README
+          '
 
   # The job above only builds Dockerfile. The release path uses
   # Dockerfile.goreleaser + dockers_v2, which used to fail for the first time
@@ -95,3 +105,6 @@ jobs:
         with:
           version: "~> v2"
           args: release --snapshot --clean --config build/package/goreleaser.yaml
+
+      - name: Verify archive license bundle
+        run: make verify-release-artifacts

@@ -6,6 +6,8 @@ FROM alpine:3.23
 WORKDIR /kvs
 ARG TARGETPLATFORM
 COPY ${TARGETPLATFORM}/kvs /usr/bin/kvs
+COPY LICENSE NOTICE /usr/share/licenses/kvs/
+COPY .release/third_party_licenses /usr/share/licenses/kvs/THIRD_PARTY_LICENSES
 
 EXPOSE 3456 3457 6379
 

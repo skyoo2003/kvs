@@ -9,6 +9,8 @@ env:
 before:
   hooks:
   - go mod download
+  - rm -rf .release/third_party_licenses
+  - ./scripts/collect-third-party-licenses.sh .release/third_party_licenses
 
 builds:
 - id: kvs
@@ -48,6 +50,8 @@ archives:
     - README.md
     - CHANGELOG.md
     - CODE_OF_CONDUCT.md
+    - src: .release/third_party_licenses/**
+      dst: THIRD_PARTY_LICENSES
 
 changelog:
   disable: false
@@ -88,12 +92,16 @@ dockers_v2:
 - images:
   - ghcr.io/skyoo2003/kvs
   dockerfile: build/package/Dockerfile.goreleaser
+  extra_files:
+  - LICENSE
+  - NOTICE
+  - .release/third_party_licenses
   ids:
   - kvs
   platforms:
   - linux/amd64
   - linux/arm64
-  sbom: false
+  sbom: true
   flags:
   - "--provenance=false"
   tags:

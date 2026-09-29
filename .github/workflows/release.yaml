@@ -57,6 +57,8 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         HOMEBREW_TAP_TOKEN: ${{ steps.tap_token.outputs.token }}
+    - name: Verify archive license bundle
+      run: make verify-release-artifacts
     # GoReleaser 2.18 still emits the deprecated `postflight` stanza. Rewrite
     # only its generated quarantine hook before the release job finishes.
     - name: Modernize the generated Homebrew cask

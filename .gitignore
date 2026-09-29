@@ -24,6 +24,7 @@ coverage.html
 
 # GoReleaser
 dist/
+.release/
 
 # Hugo
 /website/public/
