@@ -98,6 +98,12 @@ type RESPServer struct {
 	cursors respCursors
 	scripts respScripts
 	lastID  atomic.Int64
+	// commands counts every command that reached its handler, for INFO. Queued commands count
+	// when EXEC runs them and calls made inside a script count too, which is how Redis counts.
+	//
+	// ponytail: one shared atomic per command; per-connection counters summed at INFO if it ever
+	// shows in a profile.
+	commands atomic.Int64
 
 	mu       sync.Mutex
 	conns    map[*respConn]struct{}
@@ -208,7 +214,6 @@ func (s *RESPServer) newConn(netConn net.Conn) *respConn {
 		server:  s,
 		netConn: netConn,
 		writer:  resp.NewWriter(netConn),
-		id:      s.lastID.Add(1),
 		authed:  s.password == "",
 		pushes:  make(chan respPush, respPushDepth),
 		done:    make(chan struct{}),
@@ -229,6 +234,9 @@ func (s *RESPServer) track(conn *respConn) bool {
 		return false
 	}
 
+	// Only once admitted, so INFO's total_connections_received leaves out the refused ones, as
+	// Redis does.
+	conn.id = s.lastID.Add(1)
 	s.conns[conn] = struct{}{}
 
 	return true
@@ -578,6 +586,8 @@ func (c *respConn) dispatch(args [][]byte) error {
 
 		return c.writer.WriteSimple("QUEUED")
 	}
+
+	c.server.commands.Add(1)
 
 	return cmd.run(c, args)
 }

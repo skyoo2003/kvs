@@ -1,0 +1,5 @@
+kind: Fixed
+body: '`make soak` runs again; it named the repository root, which has held no Go files since the layout change.'
+time: 2026-09-29T23:48:43.760181+09:00
+custom:
+    Issue: "270"

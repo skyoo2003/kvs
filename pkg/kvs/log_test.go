@@ -263,7 +263,7 @@ func TestNewStoreWritesNothing(t *testing.T) {
 	}
 }
 
-func openTestStore(t *testing.T, dir string) *Store {
+func openTestStore(t testing.TB, dir string) *Store {
 	t.Helper()
 
 	store, err := Open(dir, StringCodec{})

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"maps"
 	"runtime"
+	"runtime/metrics"
 	"strconv"
 	"strings"
 	"sync"
@@ -484,6 +485,14 @@ func (c *respConn) cmdInfo(_ [][]byte) error {
 		"# Clients",
 		"connected_clients:" + strconv.Itoa(c.server.connCount()),
 		"",
+		"# Stats",
+		// Connection ids are handed out one per accepted connection, so the last one is the count.
+		"total_connections_received:" + strconv.FormatInt(c.server.lastID.Load(), 10),
+		"total_commands_processed:" + strconv.FormatInt(c.server.commands.Load(), 10),
+		"",
+		"# Memory",
+		"used_memory:" + strconv.FormatUint(respUsedMemory(), 10),
+		"",
 	}
 	lines = append(lines, c.server.replicationInfo()...)
 	lines = append(lines,
@@ -501,6 +510,16 @@ func (c *respConn) cmdInfo(_ [][]byte) error {
 	lines = append(lines, "")
 
 	return c.writer.WriteBulkString(strings.Join(lines, respCRLF) + respCRLF)
+}
+
+// respUsedMemory is the heap held by objects, live ones and dead ones not yet swept, the closest
+// Go has to what Redis reports as used_memory. runtime/metrics reads it without stopping the
+// world, which ReadMemStats would.
+func respUsedMemory() uint64 {
+	sample := []metrics.Sample{{Name: "/memory/classes/heap/objects:bytes"}}
+	metrics.Read(sample)
+
+	return sample[0].Value.Uint64()
 }
 
 func (c *respConn) cmdConfig(args [][]byte) error {

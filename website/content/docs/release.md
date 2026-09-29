@@ -1,6 +1,6 @@
 ---
 title: "Release Process"
-weight: 8
+weight: 9
 ---
 
 A release is one tag push. Everything else — binaries, checksums, the container image, the

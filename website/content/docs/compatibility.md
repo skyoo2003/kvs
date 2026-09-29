@@ -1,6 +1,6 @@
 ---
 title: "Compatibility"
-weight: 6
+weight: 7
 ---
 
 A `v1` tag is a promise: what this page lists will not break until `v2`, and what it does not
@@ -84,7 +84,8 @@ upgrade that raises the format means: drain, start the new version against an em
 load the data again.
 
 **Performance.** Throughput, latency, and memory are not part of the promise. kvs is built for
-not losing writes, not for being fast, and a release may trade one for the other.
+not losing writes, not for being fast, and a release may trade one for the other. Current
+numbers, and how to reproduce them, are on the [performance page](../performance/).
 
 **The Go version.** kvs builds with the Go release named in `go.mod`. A minor release may
 require a newer one.
