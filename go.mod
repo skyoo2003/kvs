@@ -42,3 +42,7 @@ require (
 	golang.org/x/text v0.41.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260706201446-f0a921348800 // indirect
 )
+
+retract [v0.1.0, v0.1.1]
+
+retract v1.0.0
