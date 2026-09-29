@@ -53,7 +53,6 @@ git tag v1.2.3 && git push origin v1.2.3
 | `make all` passes | Nothing downstream runs the tests |
 | `go test ./pkg/kvs -run TestPublicAPISurface` passes | An unintended change to the exported Go surface is a broken promise — see [Compatibility](../compatibility/) |
 | `goreleaser check` passes | Catches deprecated configuration before a floating GoReleaser version turns it into a failed release |
-| `gh release list` has no stale draft | Release Drafter keeps a rolling draft; it does not collide with a real tag, but it lingers next to the release just cut |
 | The tap still holds its formula | Deleting it before the cask exists leaves `brew install skyoo2003/tap/kvs` with nothing to resolve. The swap belongs after the release job, not before the tag — see below |
 
 A local rehearsal that does everything except publish:
