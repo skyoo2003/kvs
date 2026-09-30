@@ -1,0 +1,5 @@
+kind: Documentation
+body: '`make memtier` writes every key before the load starts, so its reads measure hits rather than misses, and the performance page is re-measured on AC power with that change.'
+time: 2026-09-30T20:54:59.618692+09:00
+custom:
+    Issue: "271"
