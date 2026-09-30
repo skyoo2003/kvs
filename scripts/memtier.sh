@@ -84,9 +84,27 @@ cluster)
   ;;
 esac
 
-# Mostly reads, the way a cache or a config store is used; 32 byte values over 100,000 keys.
+# Every key memtier can pick, memtier-0 through memtier-$keys, is written before the load starts,
+# so a GET measures a hit rather than the miss path. One MSET per thousand keys keeps this to a
+# hundred writes: one SET at a time would take minutes durable and most of an hour in a cluster.
+keys=100000
+awk -v keys="$keys" 'BEGIN {
+  value = sprintf("%032d", 0)
+  for (first = 0; first <= keys; first += 1000) {
+    last = first + 999
+    if (last > keys) last = keys
+    printf "*%d\r\n$4\r\nMSET\r\n", 1 + 2 * (last - first + 1)
+    for (id = first; id <= last; id++) {
+      key = "memtier-" id
+      printf "$%d\r\n%s\r\n$32\r\n%s\r\n", length(key), key, value
+    }
+  }
+}' | redis-cli -p "$port" --pipe >"$work/prefill.log" 2>&1
+grep -q 'errors: 0,' "$work/prefill.log" || { cat "$work/prefill.log" >&2; exit 1; }
+
+# Mostly reads, the way a cache or a config store is used; 32 byte values over those keys.
 memtier_benchmark --server 127.0.0.1 --port "$port" --protocol redis \
   --threads 4 --clients 50 --ratio 1:10 --data-size 32 \
-  --key-pattern R:R --key-maximum 100000 --distinct-client-seed \
+  --key-pattern R:R --key-maximum "$keys" --distinct-client-seed \
   --test-time "$seconds" --hide-histogram \
   --json-out-file "$root/dist/memtier-$mode.json"
