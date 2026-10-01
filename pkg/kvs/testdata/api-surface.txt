@@ -16,6 +16,9 @@ var (
 type Entry struct {
 	Value		interface{}
 	ExpiresAt	time.Time
+
+	CreateRevision	int64
+	ModRevision	int64
 }
 
 type Store struct {
@@ -31,6 +34,10 @@ func (s *Store) Close() error
 func (s *Store) Read(fn func(tx *ReadTx) error) error
 
 func (s *Store) Write(fn func(tx *Tx) error) error
+
+func (s *Store) WriteRevision(fn func(tx *Tx) error) (int64, error)
+
+func (s *Store) Revision() int64
 
 func (s *Store) Speculate(fn func(tx *Tx) error) ([][]byte, error)
 
@@ -116,10 +123,10 @@ func (e *NotLeaderError) Error() string
 
 func (e *NotLeaderError) Is(target error) bool
 
-func (s *Store) SetReplicator(replicate func(fn func(tx *Tx) error) error)
+func (s *Store) SetReplicator(replicate func(fn func(tx *Tx) error) (int64, error))
 
 func (s *Store) SetCodec(codec Codec)
 
 func (s *Store) ReplaceWith(snapshot [][]byte) error
 
-func (s *Store) ApplyReplicated(lines [][]byte) error
+func (s *Store) ApplyReplicated(rev int64, lines [][]byte) (int64, error)

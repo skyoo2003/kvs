@@ -174,9 +174,13 @@ two things to keep in step.
 the first time it uses one, and refuses to start on a directory whose version it does not
 recognize — including one written before that file existed. The alternative is a replay reading
 bytes laid out by another version, which surfaces much later and looks like corruption rather
-than a version mismatch. There is no conversion: move the directory aside and load the data
-again. The version covers the Raft store too, so it moves when the consensus library changes
-its own layout.
+than a version mismatch. A build reads the formats before its own that it lists as readable and
+restamps them with its own, so upgrading happens in place; a newer format is refused, so
+downgrading does not, and means moving the directory aside and loading the data again. Format 2,
+which added revisions, reads format 1. During a rolling upgrade an older node cannot install a
+snapshot from an upgraded one, so replace the nodes one after another rather than leaving a
+cluster mixed. The version covers the Raft store too, so it moves when the consensus library
+changes its own layout.
 
 **`--node-id` is required when there is no RESP listener.** It defaults to `--resp-addr`, so
 `--resp-addr none` leaves nothing to borrow and `serve` refuses to start rather than join a

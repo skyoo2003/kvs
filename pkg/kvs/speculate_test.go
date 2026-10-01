@@ -244,7 +244,7 @@ func TestSpeculateFrameAppliesElsewhere(t *testing.T) {
 	}
 
 	follower := newSpeculativeStore(t)
-	if err := follower.ApplyReplicated(lines); err != nil {
+	if _, err := follower.ApplyReplicated(1, lines); err != nil {
 		t.Fatalf("ApplyReplicated() error = %v", err)
 	}
 	if got := stored(t, follower, "langs"); !slices.Equal(got, []string{"go", "rust"}) {
@@ -252,7 +252,7 @@ func TestSpeculateFrameAppliesElsewhere(t *testing.T) {
 	}
 
 	// Applying it on the leader too gets both to the same place.
-	if err := leader.ApplyReplicated(lines); err != nil {
+	if _, err := leader.ApplyReplicated(2, lines); err != nil {
 		t.Fatalf("ApplyReplicated() on leader error = %v", err)
 	}
 	if got := stored(t, leader, "langs"); !slices.Equal(got, []string{"go", "rust"}) {

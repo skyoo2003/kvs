@@ -23,7 +23,7 @@ func TestEnsureStampsANewDirectory(t *testing.T) {
 		t.Fatalf("read format: %v", err)
 	}
 
-	if got, want := strings.TrimSpace(string(raw)), "1"; got != want {
+	if got, want := strings.TrimSpace(string(raw)), "2"; got != want {
 		t.Errorf("format = %q, want %q", got, want)
 	}
 
@@ -43,6 +43,28 @@ func TestEnsureStampsANewDirectory(t *testing.T) {
 	// Opening it again has to be the ordinary case, not a second stamping.
 	if err := datadir.Ensure(dir); err != nil {
 		t.Errorf("Ensure() on its own directory error = %v", err)
+	}
+}
+
+// Format 2 only added to format 1, so a format 1 directory opens as it is and is restamped, which
+// is what keeps the build that wrote it from reading records it does not know.
+func TestEnsureUpgradesAnOlderFormat(t *testing.T) {
+	dir := t.TempDir()
+	writeFormat(t, dir, "1")
+	writeFile(t, filepath.Join(dir, datadir.LogName), "")
+
+	if err := datadir.Ensure(dir); err != nil {
+		t.Fatalf("Ensure() on format 1 error = %v", err)
+	}
+
+	//nolint:gosec // The path is the temporary directory this test just made.
+	raw, err := os.ReadFile(filepath.Join(dir, datadir.FormatName))
+	if err != nil {
+		t.Fatalf("read format: %v", err)
+	}
+
+	if got, want := strings.TrimSpace(string(raw)), "2"; got != want {
+		t.Errorf("format = %q, want %q", got, want)
 	}
 }
 
@@ -153,9 +175,9 @@ func TestEnsureRefusesADirectoryItCannotRead(t *testing.T) {
 			name: "a later format",
 			arrange: func(t *testing.T, dir string) {
 				t.Helper()
-				writeFormat(t, dir, "2")
+				writeFormat(t, dir, "3")
 			},
-			wants: []string{"format 2", "format 1"},
+			wants: []string{"format 3", "format 2"},
 		},
 		{
 			name: "an earlier format",
@@ -163,7 +185,7 @@ func TestEnsureRefusesADirectoryItCannotRead(t *testing.T) {
 				t.Helper()
 				writeFormat(t, dir, "0")
 			},
-			wants: []string{"format 0", "format 1"},
+			wants: []string{"format 0", "format 2"},
 		},
 		{
 			name: "something that is not a version",
@@ -199,7 +221,7 @@ func TestEnsureRefusesADirectoryItCannotRead(t *testing.T) {
 				t.Helper()
 				writeFile(t, filepath.Join(dir, datadir.LogName), "")
 			},
-			wants: []string{"no format file", "format 1"},
+			wants: []string{"no format file", "format 2"},
 		},
 		{
 			name: "a raft directory written before versioning",
@@ -210,7 +232,7 @@ func TestEnsureRefusesADirectoryItCannotRead(t *testing.T) {
 					t.Fatalf("create raft dir: %v", err)
 				}
 			},
-			wants: []string{"no format file", "format 1"},
+			wants: []string{"no format file", "format 2"},
 		},
 	}
 

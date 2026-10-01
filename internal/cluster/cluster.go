@@ -190,43 +190,47 @@ func (n *Node) bootstrapIfAsked(
 //
 // The order is the reason Speculate exists: applying first and replicating after would leave a
 // leader that lost an election holding writes nobody else has.
-func (n *Node) Write(fn func(tx *kvs.Tx) error) error {
+func (n *Node) Write(fn func(tx *kvs.Tx) error) (int64, error) {
 	n.applyMu.Lock()
 	defer n.applyMu.Unlock()
 
 	if n.raft.State() != raft.Leader {
-		return &kvs.NotLeaderError{Leader: n.LeaderID()}
+		return 0, &kvs.NotLeaderError{Leader: n.LeaderID()}
 	}
 
 	lines, err := n.store.Speculate(fn)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	// A transaction that changed nothing has nothing to agree on.
 	if len(lines) == 0 {
-		return nil
+		return n.store.Revision(), nil
 	}
 
 	payload, err := json.Marshal(lines)
 	if err != nil {
-		return fmt.Errorf("encode frame: %w", err)
+		return 0, fmt.Errorf("encode frame: %w", err)
 	}
 
 	future := n.raft.Apply(payload, applyTimeout)
 	if err := future.Error(); err != nil {
 		if errors.Is(err, raft.ErrLeadershipLost) || errors.Is(err, raft.ErrNotLeader) {
-			return &kvs.NotLeaderError{Leader: n.LeaderID()}
+			return 0, &kvs.NotLeaderError{Leader: n.LeaderID()}
 		}
 
-		return fmt.Errorf("replicate write: %w", err)
+		return 0, fmt.Errorf("replicate write: %w", err)
 	}
 
-	// The FSM reports what applying the frame did, which is where a decode failure surfaces.
-	if applyErr, ok := future.Response().(error); ok && applyErr != nil {
-		return applyErr
+	// The FSM reports what applying the frame did: the revision it landed at, or the error that
+	// stopped it, which is where a decode failure surfaces.
+	switch result := future.Response().(type) {
+	case error:
+		return 0, result
+	case int64:
+		return result, nil
+	default:
+		return 0, fmt.Errorf("replicate write: unexpected FSM response %T", result)
 	}
-
-	return nil
 }
 
 // Join adds another node as a voting member. Only the leader can, so a node that is asked and is
@@ -308,11 +312,15 @@ func (f *fsm) Apply(entry *raft.Log) interface{} {
 		return fmt.Errorf("decode frame: %w", err)
 	}
 
-	if err := f.store.ApplyReplicated(lines); err != nil {
+	// The entry's index is the write's revision: every node applies the same entry at the same
+	// index, however far behind it was or whichever snapshot it started from.
+	//nolint:gosec // A Raft index counts log entries and stays far below 2^63.
+	rev, err := f.store.ApplyReplicated(int64(entry.Index), lines)
+	if err != nil {
 		return err
 	}
 
-	return nil
+	return rev
 }
 
 func (f *fsm) Snapshot() (raft.FSMSnapshot, error) {

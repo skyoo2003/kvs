@@ -1,0 +1,5 @@
+kind: Added
+body: 'Writes now carry a revision: `Store.Revision` and `Store.WriteRevision` report it, and every `Entry` records the revisions it was created and last changed at. Data directories move to format 2, and format 1 is upgraded in place.'
+time: 2026-09-30T21:35:00.000000+09:00
+custom:
+    Issue: "272"

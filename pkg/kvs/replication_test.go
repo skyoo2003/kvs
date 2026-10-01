@@ -21,7 +21,7 @@ func TestAgreedChangeAppliesOnAnotherNode(t *testing.T) {
 	}
 
 	follower := newReplicatedStore(t)
-	if err := follower.ApplyReplicated(lines); err != nil {
+	if _, err := follower.ApplyReplicated(1, lines); err != nil {
 		t.Fatalf("ApplyReplicated() error = %v", err)
 	}
 	if got, err := follower.Get("greeting"); err != nil || got != "hello" {
@@ -72,7 +72,7 @@ func TestAppliedFrameKeepsItsOrder(t *testing.T) {
 	}
 
 	replica := newReplicatedStore(t)
-	if err := replica.ApplyReplicated(lines); err != nil {
+	if _, err := replica.ApplyReplicated(1, lines); err != nil {
 		t.Fatalf("ApplyReplicated() error = %v", err)
 	}
 
@@ -106,10 +106,10 @@ func TestReplicatorTakesOverWrites(t *testing.T) {
 	store := newReplicatedStore(t)
 
 	seen := 0
-	store.SetReplicator(func(fn func(tx *Tx) error) error {
+	store.SetReplicator(func(fn func(tx *Tx) error) (int64, error) {
 		seen++
 
-		return ErrNotLeader
+		return 0, ErrNotLeader
 	})
 
 	if err := store.Put("greeting", "hello"); !errors.Is(err, ErrNotLeader) {

@@ -111,6 +111,45 @@ func TestFSMSnapshotRoundTrip(t *testing.T) {
 	if got, err := target.Get("greeting"); err != nil || got != "hello" {
 		t.Fatalf("Get() after restore = %v, %v, want %v, nil", got, err, "hello")
 	}
+	if got, want := target.Revision(), source.Revision(); got != want {
+		t.Fatalf("Revision() after restore = %d, want %d", got, want)
+	}
+}
+
+// Every node numbers a write the same way, because the number is the Raft entry that carried it.
+func TestClusterRevisionsAgree(t *testing.T) {
+	nodes := startCluster(t, 3)
+	leader := waitForLeader(t, nodes)
+
+	var revs [2]int64
+	for i := range revs {
+		rev, err := leader.store.WriteRevision(func(tx *kvs.Tx) error {
+			tx.Set("greeting", kvs.Entry{Value: "hello " + strconv.Itoa(i)})
+
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("WriteRevision() error = %v", err)
+		}
+		revs[i] = rev
+	}
+	if revs[0] <= 0 || revs[1] <= revs[0] {
+		t.Fatalf("revisions = %v, want positive and increasing", revs)
+	}
+
+	for _, node := range nodes {
+		eventually(t, node.id+" to reach revision "+strconv.FormatInt(revs[1], 10), func() bool {
+			var mod int64
+			_ = node.store.Read(func(tx *kvs.ReadTx) error {
+				entry, _ := tx.Get("greeting")
+				mod = entry.ModRevision
+
+				return nil
+			})
+
+			return node.store.Revision() == revs[1] && mod == revs[1]
+		})
+	}
 }
 
 // A cluster of one is still a cluster, and is what the first node of a new deployment is until

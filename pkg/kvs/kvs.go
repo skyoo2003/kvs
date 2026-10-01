@@ -39,6 +39,10 @@ const reapSample = 20
 type Entry struct {
 	Value     interface{}
 	ExpiresAt time.Time
+	// CreateRevision is the revision the key was created at and ModRevision the one it last
+	// changed at. Set fills both in, so whatever a caller puts in them is ignored.
+	CreateRevision int64
+	ModRevision    int64
 }
 
 // Store is a key-value store, holding the keyspace in memory unless Open gave it a log to
@@ -62,7 +66,10 @@ type Store struct {
 	// replicate, when set, is where a write goes instead of straight into the keyspace. A
 	// clustered node points it at consensus, so the HTTP, gRPC, and RESP servers keep calling
 	// Write and never have to know the difference.
-	replicate func(fn func(tx *Tx) error) error
+	replicate func(fn func(tx *Tx) error) (int64, error)
+	// rev is the revision of the last write that changed anything. Like the keyspace, it only
+	// changes under mu held for writing.
+	rev int64
 	// lg is the append log the keyspace survives a restart through. A Store from NewStore
 	// has none and keeps everything in memory, which is what a caller who only wants a cache
 	// gets by default.
@@ -172,14 +179,21 @@ func (s *Store) snapshot() (frame, error) {
 // under would either miss a write or repeat one.
 func (s *Store) snapshotLocked() (frame, error) {
 	now := time.Now()
-	live := make([]record, 0, len(s.data))
+	live := make([]record, 0, len(s.data)+1)
+
+	if s.rev > 0 {
+		live = append(live, record{Op: opRev, Rev: s.rev})
+	}
 
 	for key, entry := range s.data {
 		if !entry.ExpiresAt.IsZero() && !entry.ExpiresAt.After(now) {
 			continue
 		}
 
-		live = append(live, record{Op: opSet, Key: key, value: entry.Value, ExpiresAt: entry.ExpiresAt})
+		live = append(live, record{
+			Op: opSet, Key: key, value: entry.Value, ExpiresAt: entry.ExpiresAt,
+			Rev: entry.ModRevision, CreateRev: entry.CreateRevision,
+		})
 	}
 
 	return s.encodeFrame(live)
@@ -189,17 +203,17 @@ func (s *Store) snapshotLocked() (frame, error) {
 // receive. Encoding here rather than at each Set is what makes a value the codec cannot handle
 // fail the write that stored it.
 func (s *Store) encodeFrame(pending []record) (frame, error) {
-	// The one place a stored value becomes bytes, and so the one place worth checking. Nothing to
-	// encode needs no codec, which is why an empty keyspace snapshots without one and a keyspace
-	// holding a single key does not.
-	if len(pending) > 0 && s.codec == nil {
-		return nil, ErrNoCodec
-	}
-
 	lines := make(frame, 0, len(pending))
 
 	for i := range pending {
 		if pending[i].Op == opSet {
+			// The one place a stored value becomes bytes, and so the one place worth checking.
+			// Nothing to encode needs no codec, which is why an empty keyspace snapshots without
+			// one, revision and all, and a keyspace holding a single key does not.
+			if s.codec == nil {
+				return nil, ErrNoCodec
+			}
+
 			value, err := s.codec.Encode(pending[i].value)
 			if err != nil {
 				return nil, fmt.Errorf("encode %q: %w", pending[i].Key, err)
@@ -268,6 +282,14 @@ func (s *Store) Read(fn func(tx *ReadTx) error) error {
 // A clustered node sends the write through consensus from here, so this one door covers the
 // HTTP, gRPC, and RESP servers at once.
 func (s *Store) Write(fn func(tx *Tx) error) error {
+	_, err := s.WriteRevision(fn)
+
+	return err
+}
+
+// WriteRevision is Write that also reports the revision the write committed at, or the current
+// one when fn changed nothing. A write that fails reports zero.
+func (s *Store) WriteRevision(fn func(tx *Tx) error) (int64, error) {
 	if replicate := s.replicator(); replicate != nil {
 		// No lock: the replicator takes it itself, once to work out what fn would change and
 		// again to apply what the cluster agreed to.
@@ -277,7 +299,23 @@ func (s *Store) Write(fn func(tx *Tx) error) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	return s.writeLocked(fn)
+	if err := s.writeLocked(fn); err != nil {
+		return 0, err
+	}
+
+	return s.rev, nil
+}
+
+// Revision is the revision of the last write that changed anything, and zero for a store nothing
+// has been written to. Every write transaction that changes a key moves it forward once, however
+// many keys it touched; one that changes nothing leaves it where it is. On a clustered node it is
+// the index of the Raft entry that carried the write, so it only ever grows but skips the entries
+// that were not writes.
+func (s *Store) Revision() int64 {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return s.rev
 }
 
 // Speculate runs fn the way Write would, then puts the keyspace back and returns only what fn
@@ -303,7 +341,9 @@ func (s *Store) Speculate(fn func(tx *Tx) error) ([][]byte, error) {
 		return nil, ErrNoCodec
 	}
 
-	tx := &Tx{ReadTx: ReadTx{store: s, now: time.Now()}, speculative: true}
+	// The revision is a guess: the cluster numbers the write when it agrees to it, and applying
+	// it stamps that number over this one.
+	tx := &Tx{ReadTx: ReadTx{store: s, now: time.Now()}, rev: s.rev + 1, speculative: true}
 
 	err := fn(tx)
 	if err != nil {
@@ -332,12 +372,23 @@ func (s *Store) Snapshot() ([][]byte, error) {
 // hold the lock and are the reason the keyspace may change at all: startup replay and the
 // stream from a leader.
 func (s *Store) writeLocked(fn func(tx *Tx) error) error {
-	tx := &Tx{ReadTx: ReadTx{store: s, now: time.Now()}}
+	return s.writeAt(s.rev+1, fn)
+}
+
+// writeAt is writeLocked with the revision the transaction commits at chosen by the caller, which
+// is how a clustered node numbers a write with the Raft entry that carried it.
+func (s *Store) writeAt(rev int64, fn func(tx *Tx) error) error {
+	tx := &Tx{ReadTx: ReadTx{store: s, now: time.Now()}, rev: rev}
 	err := fn(tx)
 	tx.reapExpired()
 
 	if commitErr := s.commit(tx.pending); commitErr != nil && err == nil {
 		err = commitErr
+	}
+
+	// Even when fn failed: what it changed before failing is in memory, and so has happened.
+	if tx.changed && tx.rev > s.rev {
+		s.rev = tx.rev
 	}
 
 	return err
@@ -502,6 +553,10 @@ type Tx struct {
 	speculative bool
 	// undoLog is what rollback puts back, and is filled only while speculating.
 	undoLog []undo
+	// rev is the revision the transaction commits at, and changed whether it has made a change a
+	// caller can see, which is what decides whether the store's revision moves at all.
+	rev     int64
+	changed bool
 }
 
 // undo is what one key held before the transaction touched it.
@@ -582,8 +637,21 @@ func (tx *Tx) Get(key string) (Entry, bool) {
 	return entry, true
 }
 
-// Set stores entry under key, replacing whatever was there.
+// Set stores entry under key, replacing whatever was there. The key keeps its CreateRevision
+// when it already held a live value, and takes the transaction's revision otherwise.
 func (tx *Tx) Set(key string, entry Entry) {
+	entry.CreateRevision = tx.rev
+	if old, ok := tx.store.data[key]; ok && !tx.expired(old) {
+		entry.CreateRevision = old.CreateRevision
+	}
+	entry.ModRevision = tx.rev
+
+	tx.put(key, entry)
+}
+
+// put stores entry exactly as given, revisions included, which is what a replay that has them
+// written down needs.
+func (tx *Tx) put(key string, entry Entry) {
 	if tx.store.data == nil {
 		tx.store.data = make(map[string]Entry)
 	}
@@ -605,7 +673,10 @@ func (tx *Tx) Set(key string, entry Entry) {
 	}
 
 	tx.signalChange(key)
-	tx.record(&record{Op: opSet, Key: key, value: entry.Value, ExpiresAt: entry.ExpiresAt})
+	tx.record(&record{
+		Op: opSet, Key: key, value: entry.Value, ExpiresAt: entry.ExpiresAt,
+		Rev: entry.ModRevision, CreateRev: entry.CreateRevision,
+	})
 }
 
 // Delete removes key and reports whether it was there to begin with.
@@ -637,14 +708,14 @@ func (tx *Tx) Flush() {
 	if !tx.speculative {
 		tx.store.signalFlush()
 	}
-	tx.record(&record{Op: opFlush})
+	tx.record(&record{Op: opFlush, Rev: tx.rev})
 }
 
 // remove deletes key as a change callers can see, so it marks the key's watchers.
 func (tx *Tx) remove(key string) {
 	tx.discard(key)
 	tx.signalChange(key)
-	tx.record(&record{Op: opDel, Key: key})
+	tx.record(&record{Op: opDel, Key: key, Rev: tx.rev})
 }
 
 // record queues a change for the log. It sits beside every signalChange call and nowhere else,
@@ -652,6 +723,9 @@ func (tx *Tx) remove(key string) {
 // store tidying up after itself? Reclaiming an expired key is the latter, and needs no record
 // of its own — the expiry that condemned it is already in the entry the log holds.
 func (tx *Tx) record(rec *record) {
+	// Before the check below: a store with no log keeps no records but still counts revisions.
+	tx.changed = true
+
 	if !tx.speculative && !tx.store.recording() {
 		return
 	}
@@ -662,14 +736,24 @@ func (tx *Tx) record(rec *record) {
 // restore applies one replayed record. A key already past its expiry is dropped rather than
 // restored: it would not be visible anyway, and dropping it here keeps it out of the rewrite
 // that follows.
+//
+// A record that carries its revisions keeps them. One that does not, written before kvs kept
+// revisions or stripped of the leader's guess by ApplyReplicated, takes the transaction's.
 func (tx *Tx) restore(rec *record) error {
 	switch rec.Op {
+	case opRev:
+		tx.raise(rec.Rev)
 	case opFlush:
 		tx.Flush()
+		tx.raise(rec.Rev)
 	case opDel:
 		tx.Delete(rec.Key)
+		tx.raise(rec.Rev)
 	case opSet:
 		if !rec.ExpiresAt.IsZero() && !rec.ExpiresAt.After(tx.now) {
+			// Gone, but its revision was handed out all the same.
+			tx.raise(rec.Rev)
+
 			return nil
 		}
 
@@ -677,13 +761,37 @@ func (tx *Tx) restore(rec *record) error {
 		if err != nil {
 			return fmt.Errorf("decode %q: %w", rec.Key, err)
 		}
-		tx.Set(rec.Key, Entry{Value: value, ExpiresAt: rec.ExpiresAt})
+
+		entry := Entry{Value: value, ExpiresAt: rec.ExpiresAt}
+		if rec.Rev == 0 {
+			tx.Set(rec.Key, entry)
+
+			return nil
+		}
+
+		entry.CreateRevision, entry.ModRevision = rec.CreateRev, rec.Rev
+		tx.put(rec.Key, entry)
+		tx.raise(rec.Rev)
 	default:
 		// Refusing to start beats starting with part of the keyspace missing.
 		return fmt.Errorf("unknown log operation %q", rec.Op)
 	}
 
 	return nil
+}
+
+// raise carries the transaction forward to the revision a replayed record was written at, so the
+// store comes back at the revision it stopped at rather than one past whatever survived the
+// rewrite. A record from before revisions carries zero and moves nothing.
+func (tx *Tx) raise(rev int64) {
+	if rev == 0 {
+		return
+	}
+
+	if rev > tx.rev {
+		tx.rev = rev
+	}
+	tx.changed = true
 }
 
 // discard reclaims key and keeps the expiry index in step, without marking its watchers.

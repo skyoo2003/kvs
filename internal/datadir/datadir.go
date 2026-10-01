@@ -14,11 +14,18 @@ import (
 	"strings"
 )
 
-// Version is what this build writes and the only one it reads. Raise it whenever the bytes in
-// a data directory change shape — including when a dependency that owns part of the directory,
-// the Raft log store among them, changes its own format under us. There is no conversion
-// between versions, which is why the check has to be loud.
-const Version = 1
+// Version is what this build writes. Raise it whenever the bytes in a data directory change
+// shape — including when a dependency that owns part of the directory, the Raft log store among
+// them, changes its own format under us. A build reads its own version and those back to
+// oldestReadable, and nothing newer: there is no conversion code, which is why the check has to
+// be loud.
+const Version = 2
+
+// oldestReadable is the oldest version this build still reads as it lies. Format 2 is format 1
+// with revisions added, and a record without one is read as revision 1, so a format 1 directory
+// needs nothing converted. It is restamped all the same, so that the older build it came from
+// refuses it rather than meeting records it cannot read.
+const oldestReadable = 1
 
 const (
 	// FormatName is the file holding Version. It sits beside the data rather than inside it
@@ -69,9 +76,9 @@ func (e *FormatError) Is(target error) bool {
 }
 
 // Ensure makes dir usable by this build, creating it and stamping the current version when it
-// is new. A directory belonging to another version comes back as a FormatError and nothing is
-// touched: refusing to start is the whole point, because the alternative is a replay that
-// half-works.
+// is new, and restamping it when it holds an older version this build still reads. A directory
+// belonging to any other version comes back as a FormatError and nothing is touched: refusing to
+// start is the whole point, because the alternative is a replay that half-works.
 func Ensure(dir string) error {
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return fmt.Errorf("create data dir: %w", err)
@@ -110,8 +117,13 @@ func Ensure(dir string) error {
 
 	text := strings.TrimSpace(string(raw))
 
-	if found, convErr := strconv.Atoi(text); convErr != nil || found != Version {
+	found, convErr := strconv.Atoi(text)
+
+	switch {
+	case convErr != nil || found < oldestReadable || found > Version:
 		return &FormatError{Dir: dir, Raw: text}
+	case found < Version:
+		return stamp(path)
 	}
 
 	return nil
