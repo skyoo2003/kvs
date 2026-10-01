@@ -143,8 +143,8 @@ func TestWriteFailureRedirectsRatherThanBlamingTheClient(t *testing.T) {
 	store := kvs.NewStore()
 	store.SetCodec(kvs.StringCodec{})
 	// What a follower does with a write: hand it to consensus, which says take it elsewhere.
-	store.SetReplicator(func(func(*kvs.Tx) error) error {
-		return &kvs.NotLeaderError{Leader: "127.0.0.1:6381"}
+	store.SetReplicator(func(func(*kvs.Tx) error) (int64, error) {
+		return 0, &kvs.NotLeaderError{Leader: "127.0.0.1:6381"}
 	})
 
 	client := newRESPClient(t, store)

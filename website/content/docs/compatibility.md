@@ -51,7 +51,7 @@ Importing `github.com/skyoo2003/kvs/pkg/kvs` gets you:
 The former module-root library path is no longer provided; update imports to this package path.
 
 - `Store` and its constructors `NewStore` and `Open`, with `Get`, `Put`, `Delete`, `Read`,
-  `Write`, `Snapshot`, `Speculate`, `Watch`, `SetCodec`, and `Close`
+  `Write`, `WriteRevision`, `Revision`, `Snapshot`, `Speculate`, `Watch`, `SetCodec`, and `Close`
 - The transaction types `ReadTx` and `Tx`, and `Watch`
 - `Entry`, and the `Codec` interface with `StringCodec`
 - The sentinel errors `ErrKeyNotFound`, `ErrNoCodec`, `ErrUnsupportedValue`, and `ErrNotLeader`

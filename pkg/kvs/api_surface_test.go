@@ -25,7 +25,7 @@ const surfaceHeader = `# Exported API surface of this package - see website/cont
 # for how much of it v1 promises, and for the cluster plumbing it exempts by name.
 # A line changed or removed below is a breaking change and needs a major version, unless the
 # page exempts it. A line added is a new promise: it cannot be taken back within v1.
-# Regenerate deliberately: go test -run TestPublicAPISurface . -update
+# Regenerate deliberately: go test ./pkg/kvs -run TestPublicAPISurface -update
 ` + headerSep
 
 var updateSurface = flag.Bool("update", false, "rewrite "+goldenPath+" from the current source")

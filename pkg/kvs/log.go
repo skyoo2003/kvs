@@ -57,6 +57,10 @@ const (
 	opSet   = "set"
 	opDel   = "del"
 	opFlush = "flush"
+	// opRev heads a snapshot and every rewrite of the log. The rewrite drops deleted keys, and the
+	// revisions of the writes that deleted them with them, so without it a store would come back
+	// at one past whatever survived rather than at the revision it stopped at.
+	opRev = "rev"
 )
 
 // logName is the file the append log lives in, inside the directory Open was given. The name
@@ -67,11 +71,17 @@ const logName = datadir.LogName
 // record is one durable change. Value holds the encoded form and value the original: encoding
 // is deferred to commit so that a value the codec cannot handle fails the write that stored
 // it, rather than vanishing between here and the next startup.
+//
+// Rev is the revision the record was written at: a set carries the key's ModRevision, with its
+// CreateRevision in CreateRev, a del or a flush the revision of its transaction, and a rev
+// record the store's own. Zero marks a record written before kvs kept revisions.
 type record struct {
 	Op        string    `json:"op"`
 	Key       string    `json:"key,omitempty"`
 	Value     []byte    `json:"value,omitempty"`
 	ExpiresAt time.Time `json:"expires_at,omitzero"`
+	Rev       int64     `json:"rev,omitempty"`
+	CreateRev int64     `json:"create_rev,omitempty"`
 
 	value interface{}
 }

@@ -177,8 +177,9 @@ func TestStoreCompactsLogOnOpen(t *testing.T) {
 	}
 
 	reopened := openTestStore(t, dir)
-	if got := logRecords(t, dir); got != 1 {
-		t.Fatalf("records after compaction = %d, want 1", got)
+	// One record for the key, and the revision the store stopped at ahead of it.
+	if got := logRecords(t, dir); got != 2 {
+		t.Fatalf("records after compaction = %d, want 2", got)
 	}
 	if _, err := reopened.Get("counter"); err != nil {
 		t.Fatalf(`Get("counter") after compaction error = %v`, err)
@@ -223,7 +224,7 @@ func TestOpenRefusesADirectoryFromAnotherFormat(t *testing.T) {
 	}
 
 	format := filepath.Join(dir, datadir.FormatName)
-	if err := os.WriteFile(format, []byte("2\n"), 0o600); err != nil {
+	if err := os.WriteFile(format, []byte("3\n"), 0o600); err != nil {
 		t.Fatalf("write format: %v", err)
 	}
 
@@ -236,7 +237,7 @@ func TestOpenRefusesADirectoryFromAnotherFormat(t *testing.T) {
 		t.Errorf("errors.Is(err, datadir.ErrFormat) = false, err = %v", reopenErr)
 	}
 
-	for _, want := range []string{"format 2", "format 1"} {
+	for _, want := range []string{"format 3", "format 2"} {
 		if !strings.Contains(reopenErr.Error(), want) {
 			t.Errorf("message %q does not carry %q", reopenErr.Error(), want)
 		}

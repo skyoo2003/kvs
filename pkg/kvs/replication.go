@@ -29,21 +29,22 @@ func (e *NotLeaderError) Is(target error) bool {
 }
 
 // SetReplicator routes writes through replicate instead of straight into the keyspace, which is
-// how a clustered node makes every write pass consensus first. Passing nil puts it back.
+// how a clustered node makes every write pass consensus first, and reports the revision the write
+// committed at. Passing nil puts it back.
 //
 // Set it before anything serves: it is read without the lock a write would take, on the
 // understanding that it is wired up once at startup.
 //
 // Exported for internal/cluster to reach across the package boundary, and outside the v1
 // compatibility promise: see website/content/docs/compatibility.md.
-func (s *Store) SetReplicator(replicate func(fn func(tx *Tx) error) error) {
+func (s *Store) SetReplicator(replicate func(fn func(tx *Tx) error) (int64, error)) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	s.replicate = replicate
 }
 
-func (s *Store) replicator() func(fn func(tx *Tx) error) error {
+func (s *Store) replicator() func(fn func(tx *Tx) error) (int64, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -62,7 +63,8 @@ func (s *Store) SetCodec(codec Codec) {
 
 // ReplaceWith throws the keyspace away and rebuilds it from snapshot, which is what a node
 // restored from a cluster snapshot needs: the agreed state is the only authority, so whatever the
-// node held before is worth keeping only until it arrives.
+// node held before is worth keeping only until it arrives. That goes for the revision too: the
+// node comes back at the one the snapshot was taken at.
 //
 // Exported for internal/cluster to reach across the package boundary, and outside the v1
 // compatibility promise: see website/content/docs/compatibility.md.
@@ -70,33 +72,57 @@ func (s *Store) ReplaceWith(snapshot [][]byte) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	return s.writeLocked(func(tx *Tx) error {
+	s.rev = 0
+
+	err := s.writeLocked(func(tx *Tx) error {
 		tx.Flush()
 
-		return applyFrame(tx, snapshot)
+		return applyFrame(tx, snapshot, true)
 	})
+
+	// The flush counts as a change, but an empty snapshot is of a store nothing was written to,
+	// and has no revision record to say so.
+	if len(snapshot) == 0 {
+		s.rev = 0
+	}
+
+	return err
 }
 
-// ApplyReplicated applies one frame the cluster has agreed on. A frame is one transaction on the
-// node that took the write, and applying it inside one transaction here is what keeps a MULTI
-// atomic on every node.
+// ApplyReplicated applies one frame the cluster has agreed on, at the revision the cluster gave
+// it, and reports the store's revision afterwards. A frame is one transaction on the node that
+// took the write, and applying it inside one transaction here is what keeps a MULTI atomic on
+// every node.
+//
+// The revisions written inside the frame are ignored: they are the leader's guess from before the
+// cluster agreed, and only rev is the same on every node.
 //
 // Exported for internal/cluster to reach across the package boundary, and outside the v1
 // compatibility promise: see website/content/docs/compatibility.md.
-func (s *Store) ApplyReplicated(lines [][]byte) error {
+func (s *Store) ApplyReplicated(rev int64, lines [][]byte) (int64, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	return s.writeLocked(func(tx *Tx) error {
-		return applyFrame(tx, lines)
-	})
+	if err := s.writeAt(rev, func(tx *Tx) error {
+		return applyFrame(tx, lines, false)
+	}); err != nil {
+		return 0, err
+	}
+
+	return s.rev, nil
 }
 
-func applyFrame(tx *Tx, lines [][]byte) error {
+// applyFrame restores every record in lines. keepRevisions keeps the revisions the records carry,
+// which is right for a snapshot; without it they take the transaction's.
+func applyFrame(tx *Tx, lines [][]byte, keepRevisions bool) error {
 	for _, line := range lines {
 		rec, err := decodeRecord(line)
 		if err != nil {
 			return err
+		}
+
+		if !keepRevisions {
+			rec.Rev, rec.CreateRev = 0, 0
 		}
 
 		if err := tx.restore(&rec); err != nil {
