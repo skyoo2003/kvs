@@ -43,7 +43,7 @@ jobs:
     # section. Expires with the job, so nothing long-lived is stored anywhere.
     - name: Mint a Homebrew tap token
       id: tap_token
-      uses: actions/create-github-app-token@v3.2.0
+      uses: actions/create-github-app-token@v3.3.0
       with:
         app-id: ${{ secrets.TAP_APP_ID }}
         private-key: ${{ secrets.TAP_APP_PRIVATE_KEY }}
