@@ -50,7 +50,7 @@ jobs:
         owner: skyoo2003
         repositories: homebrew-tap
     - name: Execute GoReleaser
-      uses: goreleaser/goreleaser-action@v7.2.3
+      uses: goreleaser/goreleaser-action@v7.3.0
       with:
         version: "~> v2"
         args: release --clean --config build/package/goreleaser.yaml --release-notes changes/${{ github.ref_name }}.md
